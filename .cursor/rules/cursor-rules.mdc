@@ -1,0 +1,455 @@
+---
+alwaysApply: false
+---
+### 2. Window Management (vim.api)
+
+**Documentation**: https://neovim.io/doc/user/api.html#api-window
+
+**Key Functions**:
+
+```lua
+-- Open floating window
+vim.api.nvim_open_win(buffer, enter, config)
+-- buffer: buffer handle (from nvim_create_buf)
+-- enter: boolean (true to enter window)
+-- config: table with layout options
+
+-- Example config for floating window:
+local config = {
+  relative = 'editor',  -- 'editor', 'win', 'cursor'
+  width = 60,
+  height = 20,
+  col = 10,
+  row = 5,
+  border = 'rounded',  -- 'none', 'single', 'double', 'rounded'
+  style = 'minimal',
+  zindex = 50,
+}
+
+-- Close window
+vim.api.nvim_win_close(window, force)
+
+-- Set window options
+vim.api.nvim_win_set_option(window, option, value)
+
+-- Get window config
+vim.api.nvim_win_get_config(window)
+```
+
+---
+
+### 3. Buffer Management (vim.api)
+
+**Documentation**: https://neovim.io/doc/user/api.html#api-buffer
+
+**Key Functions**:
+
+```lua
+-- Create buffer
+vim.api.nvim_create_buf(listed, scratch)
+-- listed: boolean (show in buffer list)
+-- scratch: boolean (temporary buffer)
+
+-- Set buffer lines
+vim.api.nvim_buf_set_lines(buffer, start, end, strict_indexing, lines)
+-- Example: vim.api.nvim_buf_set_lines(buf, 0, -1, false, {"line1", "line2"})
+
+-- Get buffer lines
+vim.api.nvim_buf_get_lines(buffer, start, end, strict_indexing)
+
+-- Set buffer option
+vim.api.nvim_buf_set_option(buffer, option, value)
+-- Example: vim.api.nvim_buf_set_option(buf, 'modifiable', false)
+
+-- Delete buffer
+vim.api.nvim_buf_delete(buffer, opts)
+
+-- Check if buffer is valid
+vim.api.nvim_buf_is_valid(buffer)
+
+-- Reload buffer from disk
+vim.cmd('edit')  -- or vim.cmd('checktime') for current buffer
+```
+
+---
+
+### 4. Keymaps (vim.keymap)
+
+**Documentation**: https://neovim.io/doc/user/lua-guide.html#lua-guide-mappings
+
+**Key Functions**:
+
+```lua
+-- Set keymap
+vim.keymap.set(mode, lhs, rhs, opts)
+-- mode: string or table ('n', 'v', 'i', or {'n', 'v'})
+-- lhs: key combination (e.g., '<leader>ca')
+-- rhs: function or string command
+-- opts: table with options
+
+-- Example:
+vim.keymap.set('n', '<leader>ca', function()
+  require('ai-review').accept_change()
+end, {
+  desc = 'Accept change',
+  buffer = 0,  -- 0 for current buffer, nil for global
+  silent = true,
+  noremap = true,
+})
+
+-- Delete keymap
+vim.keymap.del(mode, lhs, opts)
+```
+
+---
+
+### 5. Autocommands (vim.api)
+
+**Documentation**: https://neovim.io/doc/user/lua-guide.html#lua-guide-autocommands
+
+**Key Functions**:
+
+```lua
+-- Create autocommand group
+local group_id = vim.api.nvim_create_augroup(name, opts)
+-- opts: { clear = true } to clear existing autocmds in group
+
+-- Create autocommand
+vim.api.nvim_create_autocmd(event, opts)
+-- event: string or table of events
+-- opts: table with pattern, callback, group, etc.
+
+-- Example:
+local group = vim.api.nvim_create_augroup('AIReview', { clear = true })
+vim.api.nvim_create_autocmd('BufWritePost', {
+  group = group,
+  pattern = '*.lua',
+  callback = function()
+    print('Lua file saved')
+  end,
+})
+
+-- Delete autocommand
+vim.api.nvim_del_autocmd(id)
+
+-- Clear autocommands
+vim.api.nvim_clear_autocmds(opts)
+```
+
+---
+
+### 6. User Commands (vim.api)
+
+**Documentation**: https://neovim.io/doc/user/lua-guide.html#lua-guide-commands
+
+**Key Functions**:
+
+```lua
+-- Create user command
+vim.api.nvim_create_user_command(name, command, opts)
+-- command: string or function
+-- opts: table with nargs, desc, etc.
+
+-- Example:
+vim.api.nvim_create_user_command('AIReviewOpen', function()
+  require('ai-review').open_panel()
+end, {
+  desc = 'Open AI review panel',
+  nargs = 0,  -- number of arguments (0, 1, '*', '?', '+')
+})
+
+-- Delete user command
+vim.api.nvim_del_user_command(name)
+
+-- Buffer-local commands
+vim.api.nvim_buf_create_user_command(buffer, name, command, opts)
+vim.api.nvim_buf_del_user_command(buffer, name)
+```
+
+---
+
+### 7. Notifications (vim.notify)
+
+**Documentation**: https://neovim.io/doc/user/lua.html#vim.notify()
+
+**Key Functions**:
+
+```lua
+-- Display notification
+vim.notify(message, level, opts)
+-- level: vim.log.levels.ERROR, .WARN, .INFO, .DEBUG, .TRACE
+-- opts: optional table with title, etc.
+
+-- Examples:
+vim.notify("File accepted", vim.log.levels.INFO)
+vim.notify("Error occurred", vim.log.levels.ERROR, { title = "AI Review" })
+```
+
+---
+
+### 8. Scheduling (vim.schedule)
+
+**Documentation**: https://neovim.io/doc/user/lua.html#vim.schedule()
+
+**Key Functions**:
+
+```lua
+-- Schedule function on main event loop (for async callbacks)
+vim.schedule(function()
+  -- UI operations here
+end)
+
+-- Wrap callback for immediate scheduling
+local wrapped = vim.schedule_wrap(function()
+  -- This will be scheduled automatically
+end)
+
+-- Use with vim.uv callbacks:
+handle:start(path, {}, vim.schedule_wrap(function(err, filename, events)
+  -- Safe to do UI operations here
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, {"Updated"})
+end))
+```
+
+**Important**: Always use `vim.schedule_wrap()` for LibUV callbacks that perform UI operations.
+
+---
+
+### 9. File Operations (vim.fn & vim.loop)
+
+**Documentation**: https://neovim.io/doc/user/builtin.html
+
+**Key Functions**:
+
+```lua
+-- Get current working directory
+vim.fn.getcwd()
+
+-- Check if file exists
+vim.fn.filereadable(path)
+
+-- Get file modification time
+vim.fn.getftime(path)
+
+-- Glob for files
+vim.fn.glob(pattern, nosuf, list, alllinks)
+
+-- Execute shell command
+vim.fn.system(command)
+
+-- Check if buffer is modified
+vim.api.nvim_buf_get_option(buf, 'modified')
+```
+
+---
+
+### 10. Diff Integration (vim.diff & External)
+
+**Documentation**: https://neovim.io/doc/user/lua.html#vim.diff()
+
+**Key Functions**:
+
+```lua
+-- Generate diff between two strings
+local diff = vim.diff(string1, string2, opts)
+-- opts: algorithm, ctxlen, etc.
+
+-- Open Diffview.nvim (external plugin)
+vim.cmd('DiffviewOpen')
+vim.cmd('DiffviewClose')
+
+-- Native diff mode
+vim.cmd('diffthis')  -- Enable diff for current window
+vim.cmd('diffoff')   -- Disable diff
+```
+
+---
+
+### 11. Tables and Utilities (vim.tbl_*)
+
+**Documentation**: https://neovim.io/doc/user/lua.html#vim.tbl_*
+
+**Key Functions**:
+
+```lua
+-- Check if table is empty
+vim.tbl_isempty(table)
+
+-- Deep extend tables
+vim.tbl_deep_extend(behavior, table1, table2, ...)
+-- behavior: 'error', 'keep', 'force'
+
+-- Filter table
+vim.tbl_filter(function(value) return condition end, table)
+
+-- Map over table
+vim.tbl_map(function(value) return new_value end, table)
+
+-- Get table keys
+vim.tbl_keys(table)
+
+-- Get table values
+vim.tbl_values(table)
+```
+
+---
+
+### 12. Inspection & Debugging (vim.inspect)
+
+**Documentation**: https://neovim.io/doc/user/lua.html#vim.inspect()
+
+**Key Functions**:
+
+```lua
+-- Pretty print any Lua value
+print(vim.inspect(value))
+
+-- Log to messages
+vim.api.nvim_echo({{message, "Normal"}}, false, {})
+
+-- Get runtime paths
+vim.api.nvim_list_runtime_paths()
+```
+
+---
+
+## Plugin Structure Best Practices
+
+### Recommended Directory Layout
+
+```
+plugin-name.nvim/
+├── lua/
+│   └── plugin-name/
+│       ├── init.lua         # Main entry with setup()
+│       ├── config.lua       # Configuration defaults
+│       ├── [feature].lua    # Feature modules
+│       └── utils.lua        # Helper functions
+├── plugin/
+│   └── plugin-name.lua      # Auto-load, register commands
+├── doc/
+│   └── plugin-name.txt      # Help documentation
+└── README.md
+```
+
+### init.lua Pattern
+
+```lua
+local M = {}
+
+-- Default configuration
+local config = {
+  -- defaults here
+}
+
+-- Setup function (called by user)
+function M.setup(user_config)
+  config = vim.tbl_deep_extend('force', config, user_config or {})
+  
+  -- Initialize plugin
+  M.init()
+end
+
+-- Internal initialization
+function M.init()
+  -- Set up autocommands, commands, keymaps
+end
+
+-- Expose API functions
+function M.some_action()
+  -- Implementation
+end
+
+return M
+```
+
+---
+
+## Error Handling
+
+```lua
+-- Protected call (pcall)
+local ok, result = pcall(function()
+  -- Code that might error
+end)
+
+if not ok then
+  vim.notify("Error: " .. result, vim.log.levels.ERROR)
+end
+
+-- Check for optional dependencies
+local has_diffview, diffview = pcall(require, 'diffview')
+if not has_diffview then
+  vim.notify("Diffview.nvim not installed", vim.log.levels.WARN)
+  -- Fallback behavior
+end
+```
+
+---
+
+## Performance Tips
+
+1. **Lazy loading**: Don't require modules at the top level
+```lua
+-- ❌ Bad
+local utils = require('plugin.utils')
+
+-- ✅ Good
+function M.some_action()
+  local utils = require('plugin.utils')
+end
+```
+
+2. **Use vim.schedule for UI updates in async contexts**
+
+3. **Close all LibUV handles** to prevent memory leaks
+
+4. **Use buffer-local options** when possible
+
+5. **Validate user input** with `vim.validate()`
+
+```lua
+vim.validate({
+  width = {config.width, 'number'},
+  height = {config.height, 'number'},
+})
+```
+
+---
+
+## Additional Resources
+
+- **Neovim Best Practices**: https://github.com/nvim-neorocks/nvim-best-practices
+- **LibUV (luv) Documentation**: https://github.com/luvit/luv/blob/master/docs.md
+- **Mini.nvim Examples**: https://github.com/echasnovski/mini.nvim
+- **Telescope.nvim Source**: https://github.com/nvim-telescope/telescope.nvim (great reference)
+
+---
+
+## Testing
+
+Use [plenary.nvim](https://github.com/nvim-lua/plenary.nvim) for testing:
+
+```lua
+local eq = assert.are.same
+
+describe("plugin", function()
+  it("should do something", function()
+    local result = require('plugin').action()
+    eq(expected, result)
+  end)
+end)
+```
+
+---
+
+**When implementing the AI Review plugin, use these APIs in this order:**
+
+1. Start with `vim.uv.new_fs_event()` for file watching
+2. Use `vim.api.nvim_create_buf()` and `vim.api.nvim_open_win()` for UI
+3. Add `vim.keymap.set()` for keybindings
+4. Create `vim.api.nvim_create_user_command()` for commands
+5. Integrate diff viewing (Diffview.nvim or `vim.diff()`)
+6. Add state management using Lua tables
+7. Use `vim.notify()` for user feedback
+8. Always wrap LibUV callbacks with `vim.schedule_wrap()`
