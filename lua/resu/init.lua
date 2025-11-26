@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 local M = {}
 
 local config_module = require("resu.config")
@@ -10,11 +11,6 @@ local diff = require("resu.diff")
 
 function M.setup(opts)
   config_module.defaults = vim.tbl_deep_extend("force", config_module.defaults, opts or {})
-
-  -- Start watcher automatically if configured?
-  -- For now, we start watcher when the user opens the review or explicitly starts it.
-  -- Or we can start it on setup. The requirements say "Watch directories (default: cwd)".
-  -- It's probably better to start watching immediately so we catch changes even before opening UI.
 
   local dir = config_module.defaults.watch_dir or vim.fn.getcwd()
   watcher.start(dir, function()
@@ -50,7 +46,7 @@ function M.setup(opts)
 
       -- Navigation with standard keys
       vim.keymap.set("n", "<CR>", function()
-        M.open_current_diff()
+        M.open_current_file()
       end, opts)
       vim.keymap.set("n", "j", function()
         M.next()
@@ -75,8 +71,6 @@ function M.toggle()
 end
 
 function M.refresh()
-  -- Force re-scan or just refresh UI?
-  -- Watcher handles updates, but maybe user wants manual refresh
   ui.refresh()
   vim.notify("Resu: Refreshed", vim.log.levels.INFO)
 end
@@ -93,10 +87,10 @@ function M.prev()
   end
 end
 
-function M.open_current_diff()
+function M.open_current_file()
   local current = state.get_current_file()
   if current then
-    diff.open(current.path)
+    ui.open_editor(current.path)
   end
 end
 
@@ -104,9 +98,19 @@ function M.accept()
   local current = state.get_current_file()
   if current then
     state.update_status(current.path, state.Status.ACCEPTED)
-    if config_module.defaults.auto_stage then
-      vim.fn.system("git add " .. vim.fn.shellescape(current.path))
+
+    -- "Accepting" in inline mode means we clear the diffs (virt text)
+    -- and consider the changes "merged" (i.e., we keep the file as is).
+    -- We DO NOT git add.
+
+    -- Find buffer if open
+    local buf = vim.fn.bufnr(current.path)
+    if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
+      diff.clear(buf)
     end
+
+    -- We might want to keep the file in the list as "Accepted"
+    -- until manually refreshed or reset.
     ui.refresh()
     M.next()
   end
@@ -116,6 +120,37 @@ function M.decline()
   local current = state.get_current_file()
   if current then
     state.update_status(current.path, state.Status.DECLINED)
+
+    -- "Declining" means we revert the file to HEAD.
+    -- This effectively undoes the changes made by the AI tool.
+    local cmd = "git show HEAD:" .. vim.fn.shellescape(current.path)
+    local original_lines = vim.fn.systemlist(cmd)
+
+    if vim.v.shell_error == 0 then
+      -- Write original content back to file
+      local f = io.open(current.path, "w")
+      if f then
+        f:write(table.concat(original_lines, "\n"))
+        f:close()
+
+        -- Reload buffer if open
+        local buf = vim.fn.bufnr(current.path)
+        if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
+          vim.api.nvim_buf_set_lines(buf, 0, -1, false, original_lines)
+          diff.clear(buf)
+        end
+        vim.notify("Resu: Reverted " .. current.path, vim.log.levels.INFO)
+      else
+        vim.notify("Resu: Failed to revert " .. current.path, vim.log.levels.ERROR)
+      end
+    else
+      -- Maybe it was a new file? If so, delete it?
+      -- If git show fails, it might not exist in HEAD.
+      -- We should probably delete it if it's untracked/new.
+      -- For safety, let's just warn for now or try to delete if empty.
+      vim.notify("Resu: Could not revert (not in HEAD?)", vim.log.levels.WARN)
+    end
+
     ui.refresh()
     M.next()
   end

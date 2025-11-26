@@ -1,69 +1,104 @@
+---@diagnostic disable: undefined-global
 local M = {}
-local config = require("resu.config").defaults
 
-local function is_diffview_installed()
-  local ok, _ = pcall(require, "diffview")
-  return ok
-end
+local ns_id = vim.api.nvim_create_namespace("resu_inline_diff")
 
-function M.open(file_path)
-  if not file_path then return end
+-- Highlight Groups (Link these to standard groups or define custom ones)
+-- Red/Green backgrounds often depend on colorscheme.
+-- Using 'DiffAdd' and 'DiffDelete' is safest, but we can force colors if needed.
+vim.api.nvim_set_hl(0, "ResuDiffAdd", { link = "DiffAdd", default = true })
+vim.api.nvim_set_hl(0, "ResuDiffDelete", { link = "DiffDelete", default = true })
+-- For virtual lines (deleted code), we want it to look like "ghost" text
+vim.api.nvim_set_hl(0, "ResuVirtualDelete", { link = "Comment", default = true })
 
-  if is_diffview_installed() then
-    -- Use Diffview.nvim
-    -- We want to open diff for a specific file against HEAD usually
-    vim.cmd("DiffviewOpen --selected-file=" .. vim.fn.fnameescape(file_path))
-  else
-    -- Fallback: Native diff
-    -- 1. Open the modified file
-    vim.cmd("edit " .. vim.fn.fnameescape(file_path))
-    local win_curr = vim.api.nvim_get_current_win()
-    
-    -- 2. Get the git root to construct relative path for git show if needed, 
-    -- or just assume cwd if simpler. Let's try to show HEAD version.
-    -- This is a bit complex to implement robustly without a library, 
-    -- but let's try a simple vertical split with HEAD version.
-    
-    local relative_path = vim.fn.fnamemodify(file_path, ":.")
-    local cmd = "git show HEAD:" .. vim.fn.shellescape(relative_path)
-    local content = vim.fn.systemlist(cmd)
-    
-    if vim.v.shell_error == 0 then
-      vim.cmd("vnew")
-      local buf = vim.api.nvim_get_current_buf()
-      vim.api.nvim_buf_set_lines(buf, 0, -1, false, content)
-      vim.api.nvim_buf_set_option(buf, "buftype", "nofile")
-      vim.api.nvim_buf_set_option(buf, "bufhidden", "wipe")
-      vim.api.nvim_buf_set_name(buf, "Original: " .. relative_path)
-      
-      -- Set filetype to match original
-      local ft = vim.filetype.match({ filename = file_path })
-      if ft then
-        vim.api.nvim_buf_set_option(buf, "filetype", ft)
+function M.render_inline(buf, file_path)
+  if not buf or not vim.api.nvim_buf_is_valid(buf) then
+    return
+  end
+  if not file_path then
+    return
+  end
+
+  -- 1. Get Original Content (HEAD)
+  local cmd = "git show HEAD:" .. vim.fn.shellescape(file_path)
+  local original_lines = vim.fn.systemlist(cmd)
+  if vim.v.shell_error ~= 0 then
+    -- New file? Or error. If new file, original is empty.
+    original_lines = {}
+  end
+  local original_text = table.concat(original_lines, "\n")
+
+  -- 2. Get Current Buffer Content
+  local current_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  local current_text = table.concat(current_lines, "\n")
+
+  -- 3. Calculate Diff
+  -- result_type = "indices" returns a list of hunks
+  -- Each hunk: { start_a, count_a, start_b, count_b }
+  -- a = original, b = current
+  local hunks = vim.diff(original_text, current_text, { result_type = "indices" })
+
+  if not hunks then
+    return
+  end
+
+  -- 4. Clear existing diff highlights
+  M.clear(buf)
+
+  -- 5. Apply Highlights & Virtual Text
+  for _, hunk in ipairs(hunks) do
+    local start_a, count_a, start_b, count_b = unpack(hunk)
+    -- start_a, start_b are 1-based line numbers.
+    -- count_a: number of lines removed from original
+    -- count_b: number of lines added to current
+
+    -- Handle DELETIONS (Lines present in original but missing in current)
+    if count_a > 0 then
+      -- We want to show these deleted lines as "virtual lines"
+      -- attached to the line *before* where they would be, or at the current position.
+
+      -- Extract the deleted lines from original_lines
+      local deleted_lines = {}
+      for i = 0, count_a - 1 do
+        local line_idx = start_a + i
+        -- indices are 1-based
+        if original_lines[line_idx] then
+          table.insert(deleted_lines, { original_lines[line_idx], "ResuDiffDelete" })
+        end
       end
-      
-      vim.cmd("diffthis")
-      vim.api.nvim_set_current_win(win_curr)
-      vim.cmd("diffthis")
-    else
-      -- Not a git repo or error, just open the file
-      vim.notify("Resu: Could not open diff (not a git repo?), opening file instead.", vim.log.levels.INFO)
+
+      -- Insert point in current buffer:
+      -- start_b is the first added line. If count_b is 0, it's an insertion point.
+      -- We usually attach virt_lines to start_b - 1 (0-based).
+      -- But if start_b is 1, we attach to line 0.
+
+      local virt_line_pos = start_b - 1
+      -- Ensure within bounds (attach to EOF if needed, but virt_lines handles that usually)
+
+      -- Use virt_lines_above if possible to simulate natural flow
+      vim.api.nvim_buf_set_extmark(buf, ns_id, virt_line_pos, 0, {
+        virt_lines = deleted_lines,
+        virt_lines_above = true,
+      })
+    end
+
+    -- Handle ADDITIONS (Lines present in current but not in original)
+    if count_b > 0 then
+      for i = 0, count_b - 1 do
+        local line_idx = start_b + i - 1 -- 0-based index for buffer
+        -- Highlight the line green
+        if line_idx >= 0 and line_idx < #current_lines then
+          vim.api.nvim_buf_add_highlight(buf, ns_id, "ResuDiffAdd", line_idx, 0, -1)
+        end
+      end
     end
   end
 end
 
-function M.close()
-  if is_diffview_installed() then
-    vim.cmd("DiffviewClose")
-  else
-    -- Turn off diff mode
-    vim.cmd("diffoff!")
-    -- Close the scratch buffer if we created one? 
-    -- It's hard to track which one without state, but diffoff is a good start.
-    -- The user can close the split manually if needed, or we can try to close other windows.
-    -- For now, just diffoff.
+function M.clear(buf)
+  if buf and vim.api.nvim_buf_is_valid(buf) then
+    vim.api.nvim_buf_clear_namespace(buf, ns_id, 0, -1)
   end
 end
 
 return M
-

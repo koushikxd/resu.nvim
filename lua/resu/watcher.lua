@@ -1,4 +1,3 @@
----@diagnostic disable: undefined-global
 local M = {}
 local uv = vim.loop or vim.uv
 local state = require("resu.state")

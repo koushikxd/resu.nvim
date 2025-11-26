@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 local M = {}
 local state = require("resu.state")
 local config = require("resu.config").defaults
@@ -16,6 +17,10 @@ local function get_status_icon(status)
   end
 end
 
+function M.get_window_handle()
+  return win_id
+end
+
 local function render()
   if not buf_nr or not vim.api.nvim_buf_is_valid(buf_nr) then
     return
@@ -23,7 +28,6 @@ local function render()
 
   local files = state.get_files()
   local lines = {}
-  local highlights = {} -- { {line, col_start, col_end, hl_group} }
 
   if #files == 0 then
     table.insert(lines, "No changes detected.")
@@ -40,25 +44,6 @@ local function render()
 
       local line = string.format(" %s %s %s", icon, name, dir)
       table.insert(lines, line)
-
-      -- Add highlighting for status
-      local hl_group = "Comment"
-      if file.status == state.Status.ACCEPTED then
-        hl_group = "String" -- Green-ish usually
-      elseif file.status == state.Status.DECLINED then
-        hl_group = "Error" -- Red-ish
-      elseif file.status == state.Status.PENDING then
-        hl_group = "WarningMsg" -- Orange/Yellow usually
-      end
-
-      -- Determine highlight range for icon
-      -- Icon is at index 2 (1-based) in string " I Name"
-      -- Lua strings 1-based, nvim_buf_add_highlight 0-based
-      -- line i-1
-      -- col start 1, col end 2
-
-      -- We'll just highlight the whole line for now or the icon
-      -- Let's use a namespace/add_highlight later if we want fancy colors.
     end
   end
 
@@ -82,53 +67,91 @@ function M.close()
     vim.api.nvim_win_close(win_id, true)
     win_id = nil
     buf_nr = nil
-    diff.close()
+    -- We don't necessarily close the editor window as the user might be working there.
+    -- But we should clear highlights if closing the review session entirely.
+    -- For now, let's just clear the sidebar.
   end
+end
+
+function M.open_editor(file_path)
+  if not file_path then
+    return
+  end
+
+  -- Check if we are already editing this file in a window to the right
+  local target_win = nil
+
+  -- Iterate windows to find if file is open
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    if win ~= win_id then
+      local buf = vim.api.nvim_win_get_buf(win)
+      local name = vim.api.nvim_buf_get_name(buf)
+      -- Simple check: if path ends with file_path (relative match)
+      -- Robust check: fnamemodify both to absolute
+      if name:match(vim.pesc(file_path) .. "$") then
+        target_win = win
+        break
+      end
+    end
+  end
+
+  if target_win then
+    vim.api.nvim_set_current_win(target_win)
+  else
+    -- Open in new split to the right if sidebar is left
+    vim.cmd("wincmd l")
+    if vim.api.nvim_get_current_win() == win_id then
+      -- If we didn't move, create new split
+      vim.cmd("vnew")
+    end
+    vim.cmd("edit " .. vim.fn.fnameescape(file_path))
+  end
+
+  -- Render inline diff
+  local buf = vim.api.nvim_get_current_buf()
+  diff.render_inline(buf, file_path)
 end
 
 function M.open()
   if M.is_open() then
-    -- Focus it?
     vim.api.nvim_set_current_win(win_id)
     return
   end
 
-  -- Create a side split
+  state.scan_changes()
+
+  -- Create sidebar
   vim.cmd("topleft vnew")
   win_id = vim.api.nvim_get_current_win()
   buf_nr = vim.api.nvim_get_current_buf()
 
-  -- Configure buffer
   vim.api.nvim_buf_set_name(buf_nr, "AI Review")
   vim.api.nvim_buf_set_option(buf_nr, "buftype", "nofile")
   vim.api.nvim_buf_set_option(buf_nr, "swapfile", false)
   vim.api.nvim_buf_set_option(buf_nr, "bufhidden", "wipe")
   vim.api.nvim_buf_set_option(buf_nr, "filetype", "resu-review")
 
-  -- Configure window
   vim.api.nvim_win_set_width(win_id, config.window.width)
   vim.api.nvim_win_set_option(win_id, "wrap", false)
   vim.api.nvim_win_set_option(win_id, "cursorline", true)
   vim.api.nvim_win_set_option(win_id, "number", false)
   vim.api.nvim_win_set_option(win_id, "relativenumber", false)
 
-  -- Initial render
   render()
 
-  -- Trigger diff for first file if available
+  -- Trigger diff for first file
   local current = state.get_current_file()
   if current then
-    diff.open(current.path)
-    -- Switch back to review window only if in same tab
+    M.open_editor(current.path)
+    -- Return focus to sidebar
     if vim.api.nvim_win_is_valid(win_id) then
-      if vim.api.nvim_win_get_tabpage(win_id) == vim.api.nvim_get_current_tabpage() then
-        vim.api.nvim_set_current_win(win_id)
-      end
+      vim.api.nvim_set_current_win(win_id)
     end
   end
 end
 
 function M.refresh()
+  state.scan_changes()
   if M.is_open() then
     vim.schedule(function()
       render()
@@ -145,15 +168,13 @@ function M.toggle()
 end
 
 function M.update_selection()
-  render() -- Moves cursor
+  render()
   local current = state.get_current_file()
   if current then
-    diff.open(current.path)
-    -- Keep focus on list only if in same tab
-    if win_id and vim.api.nvim_win_is_valid(win_id) then
-      if vim.api.nvim_win_get_tabpage(win_id) == vim.api.nvim_get_current_tabpage() then
-        vim.api.nvim_set_current_win(win_id)
-      end
+    M.open_editor(current.path)
+    -- Return focus to sidebar
+    if vim.api.nvim_win_is_valid(win_id) then
+      vim.api.nvim_set_current_win(win_id)
     end
   end
 end

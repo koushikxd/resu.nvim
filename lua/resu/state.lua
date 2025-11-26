@@ -30,13 +30,69 @@ function M.set_files(files)
   end
 end
 
+function M.scan_changes()
+  -- Get modified files
+  local modified_cmd = "git diff --name-only"
+  local modified_files = vim.fn.systemlist(modified_cmd)
+
+  -- Get untracked files
+  local untracked_cmd = "git ls-files --others --exclude-standard"
+  local untracked_files = vim.fn.systemlist(untracked_cmd)
+
+  -- Combine and deduplicate
+  local existing_status = {}
+  for _, file in ipairs(state.files) do
+    existing_status[file.path] = file.status
+  end
+
+  local new_files = {}
+  local seen = {}
+
+  local function add(list)
+    if not list then
+      return
+    end
+    for _, file in ipairs(list) do
+      if file ~= "" and not seen[file] then
+        -- Check if file exists
+        if vim.fn.filereadable(file) == 1 then
+          local status = existing_status[file] or M.Status.PENDING
+
+          table.insert(new_files, {
+            path = file,
+            status = status,
+            timestamp = os.time(),
+          })
+          seen[file] = true
+        end
+      end
+    end
+  end
+
+  add(modified_files)
+  add(untracked_files)
+
+  state.files = new_files
+  if state.current_idx > #state.files then
+    state.current_idx = math.max(1, #state.files)
+  end
+  if state.current_idx == 0 and #state.files > 0 then
+    state.current_idx = 1
+  end
+end
+
 function M.add_or_update_file(path)
+  -- Convert absolute path to relative if needed, or just rely on scan
+  local cwd = vim.fn.getcwd()
+  local rel_path = path
+  if path:sub(1, #cwd) == cwd then
+    rel_path = path:sub(#cwd + 2)
+  end
+
   local found = false
   for _, file in ipairs(state.files) do
-    if file.path == path then
+    if file.path == rel_path then
       file.timestamp = os.time()
-      -- Reset status to pending on update? Or keep as is?
-      -- Usually if a file changes again, it needs review again.
       file.status = M.Status.PENDING
       found = true
       break
@@ -45,7 +101,7 @@ function M.add_or_update_file(path)
 
   if not found then
     table.insert(state.files, {
-      path = path,
+      path = rel_path,
       status = M.Status.PENDING,
       timestamp = os.time(),
     })
