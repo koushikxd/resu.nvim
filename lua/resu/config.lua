@@ -25,11 +25,9 @@ M.defaults = {
   -- Keymaps for the review buffer
   keymaps = {
     accept = "<leader>ra",
-    decline = "<leader>cd",
+    decline = "<leader>rd",
     next = "<leader>rn",
     prev = "<leader>rp",
-    accept_file = "<leader>raf",
-    decline_file = "<leader>rdf",
     refresh = "<leader>rr",
     quit = "<leader>rq",
   },

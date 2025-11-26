@@ -17,7 +17,9 @@ local function get_status_icon(status)
 end
 
 local function render()
-  if not buf_nr or not vim.api.nvim_buf_is_valid(buf_nr) then return end
+  if not buf_nr or not vim.api.nvim_buf_is_valid(buf_nr) then
+    return
+  end
 
   local files = state.get_files()
   local lines = {}
@@ -30,11 +32,15 @@ local function render()
       local icon = get_status_icon(file.status)
       local name = vim.fn.fnamemodify(file.path, ":t")
       local dir = vim.fn.fnamemodify(file.path, ":h")
-      if dir == "." then dir = "" else dir = "(" .. dir .. ")" end
-      
+      if dir == "." then
+        dir = ""
+      else
+        dir = "(" .. dir .. ")"
+      end
+
       local line = string.format(" %s %s %s", icon, name, dir)
       table.insert(lines, line)
-      
+
       -- Add highlighting for status
       local hl_group = "Comment"
       if file.status == state.Status.ACCEPTED then
@@ -44,13 +50,13 @@ local function render()
       elseif file.status == state.Status.PENDING then
         hl_group = "WarningMsg" -- Orange/Yellow usually
       end
-      
+
       -- Determine highlight range for icon
       -- Icon is at index 2 (1-based) in string " I Name"
       -- Lua strings 1-based, nvim_buf_add_highlight 0-based
       -- line i-1
       -- col start 1, col end 2
-      
+
       -- We'll just highlight the whole line for now or the icon
       -- Let's use a namespace/add_highlight later if we want fancy colors.
     end
@@ -63,7 +69,7 @@ local function render()
   -- Update cursor position to match current index
   local current_idx = state.get_current_index()
   if win_id and vim.api.nvim_win_is_valid(win_id) and #files > 0 then
-    pcall(vim.api.nvim_win_set_cursor, win_id, {current_idx, 0})
+    pcall(vim.api.nvim_win_set_cursor, win_id, { current_idx, 0 })
   end
 end
 
@@ -98,7 +104,7 @@ function M.open()
   vim.api.nvim_buf_set_option(buf_nr, "swapfile", false)
   vim.api.nvim_buf_set_option(buf_nr, "bufhidden", "wipe")
   vim.api.nvim_buf_set_option(buf_nr, "filetype", "resu-review")
-  
+
   -- Configure window
   vim.api.nvim_win_set_width(win_id, config.window.width)
   vim.api.nvim_win_set_option(win_id, "wrap", false)
@@ -108,14 +114,16 @@ function M.open()
 
   -- Initial render
   render()
-  
+
   -- Trigger diff for first file if available
   local current = state.get_current_file()
   if current then
     diff.open(current.path)
-    -- Switch back to review window
+    -- Switch back to review window only if in same tab
     if vim.api.nvim_win_is_valid(win_id) then
-      vim.api.nvim_set_current_win(win_id)
+      if vim.api.nvim_win_get_tabpage(win_id) == vim.api.nvim_get_current_tabpage() then
+        vim.api.nvim_set_current_win(win_id)
+      end
     end
   end
 end
@@ -141,12 +149,13 @@ function M.update_selection()
   local current = state.get_current_file()
   if current then
     diff.open(current.path)
-    -- Keep focus on list
+    -- Keep focus on list only if in same tab
     if win_id and vim.api.nvim_win_is_valid(win_id) then
-      vim.api.nvim_set_current_win(win_id)
+      if vim.api.nvim_win_get_tabpage(win_id) == vim.api.nvim_get_current_tabpage() then
+        vim.api.nvim_set_current_win(win_id)
+      end
     end
   end
 end
 
 return M
-
