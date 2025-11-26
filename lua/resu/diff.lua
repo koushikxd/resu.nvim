@@ -63,7 +63,7 @@ function M.render_inline(buf, file_path)
         local line_idx = start_a + i
         -- indices are 1-based
         if original_lines[line_idx] then
-          table.insert(deleted_lines, { original_lines[line_idx], "ResuDiffDelete" })
+          table.insert(deleted_lines, { { original_lines[line_idx], "ResuDiffDelete" } })
         end
       end
 
