@@ -62,8 +62,12 @@ function M.render_inline(buf, file_path)
       for i = 0, count_a - 1 do
         local line_idx = start_a + i
         -- indices are 1-based
-        if original_lines[line_idx] then
-          table.insert(deleted_lines, { { original_lines[line_idx], "ResuDiffDelete" } })
+        local content = original_lines[line_idx]
+        if content then
+          -- Each element in virt_lines is a "line" (list of chunks).
+          -- Each chunk is { text, highlight_group }.
+          -- We explicitly wrap the chunk in a table to form a line.
+          table.insert(deleted_lines, { { content, "ResuDiffDelete" } })
         end
       end
 
