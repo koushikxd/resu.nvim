@@ -23,7 +23,7 @@ function M.setup(opts)
     pattern = "resu-review",
     callback = function(ev)
       local maps = config_module.defaults.keymaps
-      local opts = { buffer = ev.buf, silent = true }
+      local opts = { buffer = ev.buf, silent = true, nowait = true }
 
       vim.keymap.set("n", maps.accept, function()
         M.accept()
@@ -36,9 +36,6 @@ function M.setup(opts)
       end, opts)
       vim.keymap.set("n", maps.prev, function()
         M.prev()
-      end, opts)
-      vim.keymap.set("n", maps.refresh, function()
-        M.refresh()
       end, opts)
       vim.keymap.set("n", maps.quit, function()
         M.close()

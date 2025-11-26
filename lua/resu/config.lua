@@ -19,17 +19,16 @@ M.defaults = {
   -- Window configuration for the sidebar
   window = {
     position = "left",
-    width = 35,
+    width = 30,
     border = "rounded",
   },
   -- Keymaps for the review buffer
   keymaps = {
-    accept = "<leader>ra",
-    decline = "<leader>rd",
-    next = "<leader>rn",
-    prev = "<leader>rp",
-    refresh = "<leader>rr",
-    quit = "<leader>rq",
+    accept = "<C-s>",
+    decline = "<C-z>",
+    next = "<C-n>",
+    prev = "<C-S-n>",
+    quit = "q",
   },
 }
 

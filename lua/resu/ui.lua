@@ -151,6 +151,19 @@ function M.open()
 end
 
 function M.refresh()
+  -- Sync current buffer with disk if needed
+  local current = state.get_current_file()
+  if current then
+    local buf = vim.fn.bufnr(current.path)
+    if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
+      vim.api.nvim_buf_call(buf, function()
+        vim.cmd("checktime")
+      end)
+      -- Re-render diff immediately
+      diff.render_inline(buf, current.path)
+    end
+  end
+
   state.scan_changes()
   if M.is_open() then
     vim.schedule(function()

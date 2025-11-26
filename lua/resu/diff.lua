@@ -92,7 +92,10 @@ function M.render_inline(buf, file_path)
         local line_idx = start_b + i - 1 -- 0-based index for buffer
         -- Highlight the line green
         if line_idx >= 0 and line_idx < #current_lines then
-          vim.api.nvim_buf_add_highlight(buf, ns_id, "ResuDiffAdd", line_idx, 0, -1)
+          vim.api.nvim_buf_set_extmark(buf, ns_id, line_idx, 0, {
+            line_hl_group = "ResuDiffAdd",
+            priority = 200,
+          })
         end
       end
     end
