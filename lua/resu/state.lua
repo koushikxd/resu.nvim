@@ -1,16 +1,14 @@
 local M = {}
 
--- Enum for file status
 M.Status = {
   PENDING = "pending",
   ACCEPTED = "accepted",
   DECLINED = "declined",
 }
 
--- Internal state
 local state = {
-  files = {}, -- List of { path = "...", status = "...", timestamp = 12345 }
-  current_idx = 1, -- Current selected file index
+  files = {},
+  current_idx = 1,
 }
 
 function M.reset()
@@ -24,22 +22,18 @@ end
 
 function M.set_files(files)
   state.files = files
-  -- Ensure current index is valid
   if state.current_idx > #state.files then
     state.current_idx = math.max(1, #state.files)
   end
 end
 
 function M.scan_changes()
-  -- Get modified files
   local modified_cmd = "git diff --name-only"
   local modified_files = vim.fn.systemlist(modified_cmd)
 
-  -- Get untracked files
   local untracked_cmd = "git ls-files --others --exclude-standard"
   local untracked_files = vim.fn.systemlist(untracked_cmd)
 
-  -- Combine and deduplicate
   local existing_status = {}
   for _, file in ipairs(state.files) do
     existing_status[file.path] = file.status
@@ -54,7 +48,6 @@ function M.scan_changes()
     end
     for _, file in ipairs(list) do
       if file ~= "" and not seen[file] then
-        -- Check if file exists
         if vim.fn.filereadable(file) == 1 then
           local status = existing_status[file] or M.Status.PENDING
 
@@ -82,7 +75,6 @@ function M.scan_changes()
 end
 
 function M.add_or_update_file(path)
-  -- Convert absolute path to relative if needed, or just rely on scan
   local cwd = vim.fn.getcwd()
   local rel_path = path
   if path:sub(1, #cwd) == cwd then
@@ -126,19 +118,27 @@ function M.set_current_index(idx)
 end
 
 function M.next_file()
+  if #state.files == 0 then
+    return false
+  end
   if state.current_idx < #state.files then
     state.current_idx = state.current_idx + 1
-    return true
+  else
+    state.current_idx = 1
   end
-  return false
+  return true
 end
 
 function M.prev_file()
+  if #state.files == 0 then
+    return false
+  end
   if state.current_idx > 1 then
     state.current_idx = state.current_idx - 1
-    return true
+  else
+    state.current_idx = #state.files
   end
-  return false
+  return true
 end
 
 function M.update_status(path, status)

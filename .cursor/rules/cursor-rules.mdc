@@ -443,6 +443,8 @@ end)
 
 ---
 
+**IMPORTANT**: ignore the `vim` is not definedselene::undefined_variable link errors
+
 **When implementing the AI Review plugin, use these APIs in this order:**
 
 1. Start with `vim.uv.new_fs_event()` for file watching

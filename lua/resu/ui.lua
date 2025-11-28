@@ -5,7 +5,7 @@ local diff = require("resu.diff")
 
 local buf_nr = nil
 local win_id = nil
-local editor_win_id = nil
+local _editor_win_id = nil
 
 local function get_status_icon(status)
   if status == state.Status.ACCEPTED then
@@ -79,7 +79,7 @@ local function do_close()
   end
   win_id = nil
   buf_nr = nil
-  editor_win_id = nil
+  _editor_win_id = nil
 end
 
 function M.close()
@@ -126,14 +126,14 @@ function M.open_editor(file_path)
 
   if target_win then
     vim.api.nvim_set_current_win(target_win)
-    editor_win_id = target_win
+    _editor_win_id = target_win
   else
     vim.cmd("wincmd l")
     if vim.api.nvim_get_current_win() == win_id then
       vim.cmd("vnew")
     end
     vim.cmd("edit " .. vim.fn.fnameescape(file_path))
-    editor_win_id = vim.api.nvim_get_current_win()
+    _editor_win_id = vim.api.nvim_get_current_win()
   end
 
   local buf = vim.api.nvim_get_current_buf()
@@ -196,7 +196,7 @@ function M.open()
       end
       win_id = nil
       buf_nr = nil
-      editor_win_id = nil
+      _editor_win_id = nil
     end,
   })
 
@@ -211,17 +211,41 @@ function M.open()
   end
 end
 
-function M.refresh()
-  local current = state.get_current_file()
-  if current then
-    local buf = vim.fn.bufnr(current.path)
-    if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
-      vim.api.nvim_buf_call(buf, function()
-        vim.cmd("checktime")
-      end)
+local function force_reload_buffer(buf, file_path)
+  if not buf or buf == -1 or not vim.api.nvim_buf_is_valid(buf) then
+    return false
+  end
 
-      if current.status == state.Status.PENDING then
-        diff.render_inline(buf, current.path)
+  local file = io.open(file_path, "r")
+  if not file then
+    return false
+  end
+
+  local content = file:read("*a")
+  file:close()
+
+  local lines = vim.split(content, "\n", { plain = true })
+  if lines[#lines] == "" then
+    table.remove(lines)
+  end
+
+  vim.api.nvim_buf_set_option(buf, "modifiable", true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.api.nvim_buf_set_option(buf, "modified", false)
+
+  return true
+end
+
+function M.refresh()
+  local files = state.get_files()
+  for _, file in ipairs(files) do
+    local buf = vim.fn.bufnr(file.path)
+    if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
+      local full_path = vim.fn.fnamemodify(file.path, ":p")
+      force_reload_buffer(buf, full_path)
+
+      if file.status == state.Status.PENDING then
+        diff.render_inline(buf, file.path)
       end
     end
   end

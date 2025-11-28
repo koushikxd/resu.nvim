@@ -21,24 +21,8 @@ local function setup_editor_keymaps(buf)
     M.accept()
   end, opts)
 
-  vim.keymap.set("v", maps.accept, function()
-    M.accept_visual()
-  end, opts)
-
   vim.keymap.set("n", maps.decline, function()
     M.decline()
-  end, opts)
-
-  vim.keymap.set("v", maps.decline, function()
-    M.decline_visual()
-  end, opts)
-
-  vim.keymap.set("n", maps.next, function()
-    M.next()
-  end, opts)
-
-  vim.keymap.set("n", maps.prev, function()
-    M.prev()
   end, opts)
 end
 
@@ -100,7 +84,6 @@ function M.setup(opts)
       vim.keymap.set("n", maps.quit, function()
         M.close()
       end, buf_opts)
-
       vim.keymap.set("n", "<CR>", function()
         M.open_current_file()
       end, buf_opts)
@@ -172,34 +155,6 @@ function M.accept()
   end
 end
 
-function M.accept_visual()
-  local start_line = vim.fn.line("v")
-  local end_line = vim.fn.line(".")
-  if start_line > end_line then
-    start_line, end_line = end_line, start_line
-  end
-
-  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
-
-  vim.schedule(function()
-    local buf = vim.api.nvim_get_current_buf()
-    local success = diff.apply_partial_accept(buf, start_line, end_line)
-
-    if success then
-      if not diff.has_pending_hunks(buf) then
-        local current = state.get_current_file()
-        if current then
-          state.update_status(current.path, state.Status.ACCEPTED)
-          ui.refresh()
-        end
-      end
-      vim.notify("Resu: Accepted selected changes", vim.log.levels.INFO)
-    else
-      vim.notify("Resu: No changes in selection", vim.log.levels.WARN)
-    end
-  end)
-end
-
 function M.decline()
   local current = state.get_current_file()
   if current then
@@ -230,34 +185,6 @@ function M.decline()
     ui.refresh()
     M.next()
   end
-end
-
-function M.decline_visual()
-  local start_line = vim.fn.line("v")
-  local end_line = vim.fn.line(".")
-  if start_line > end_line then
-    start_line, end_line = end_line, start_line
-  end
-
-  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
-
-  vim.schedule(function()
-    local buf = vim.api.nvim_get_current_buf()
-    local success = diff.apply_partial_decline(buf, start_line, end_line)
-
-    if success then
-      if not diff.has_pending_hunks(buf) then
-        local current = state.get_current_file()
-        if current then
-          state.update_status(current.path, state.Status.DECLINED)
-          ui.refresh()
-        end
-      end
-      vim.notify("Resu: Declined selected changes", vim.log.levels.INFO)
-    else
-      vim.notify("Resu: No changes in selection", vim.log.levels.WARN)
-    end
-  end)
 end
 
 function M.accept_all()
