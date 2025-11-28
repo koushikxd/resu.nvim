@@ -1,4 +1,3 @@
----@diagnostic disable: undefined-global
 local M = {}
 local state = require("resu.state")
 local config = require("resu.config").defaults
@@ -6,14 +5,15 @@ local diff = require("resu.diff")
 
 local buf_nr = nil
 local win_id = nil
+local editor_win_id = nil
 
 local function get_status_icon(status)
   if status == state.Status.ACCEPTED then
-    return "✓" -- or [A]
+    return "✓"
   elseif status == state.Status.DECLINED then
-    return "✗" -- or [D]
+    return "✗"
   else
-    return "•" -- or [P]
+    return "•"
   end
 end
 
@@ -32,7 +32,7 @@ local function render()
   if #files == 0 then
     table.insert(lines, "No changes detected.")
   else
-    for i, file in ipairs(files) do
+    for _, file in ipairs(files) do
       local icon = get_status_icon(file.status)
       local name = vim.fn.fnamemodify(file.path, ":t")
       local dir = vim.fn.fnamemodify(file.path, ":h")
@@ -51,7 +51,6 @@ local function render()
   vim.api.nvim_buf_set_lines(buf_nr, 0, -1, false, lines)
   vim.api.nvim_buf_set_option(buf_nr, "modifiable", false)
 
-  -- Update cursor position to match current index
   local current_idx = state.get_current_index()
   if win_id and vim.api.nvim_win_is_valid(win_id) and #files > 0 then
     pcall(vim.api.nvim_win_set_cursor, win_id, { current_idx, 0 })
@@ -62,14 +61,48 @@ function M.is_open()
   return win_id and vim.api.nvim_win_is_valid(win_id)
 end
 
-function M.close()
-  if M.is_open() then
+local function has_pending_files()
+  local files = state.get_files()
+  for _, file in ipairs(files) do
+    if file.status == state.Status.PENDING then
+      return true
+    end
+  end
+  return false
+end
+
+local function do_close()
+  diff.clear_all()
+
+  if win_id and vim.api.nvim_win_is_valid(win_id) then
     vim.api.nvim_win_close(win_id, true)
-    win_id = nil
-    buf_nr = nil
-    -- We don't necessarily close the editor window as the user might be working there.
-    -- But we should clear highlights if closing the review session entirely.
-    -- For now, let's just clear the sidebar.
+  end
+  win_id = nil
+  buf_nr = nil
+  editor_win_id = nil
+end
+
+function M.close()
+  if not M.is_open() then
+    return
+  end
+
+  if has_pending_files() then
+    vim.ui.select(
+      { "Accept All", "Decline All", "Cancel" },
+      { prompt = "You have pending changes. What would you like to do?" },
+      function(choice)
+        if choice == "Accept All" then
+          require("resu").accept_all()
+          do_close()
+        elseif choice == "Decline All" then
+          require("resu").decline_all()
+          do_close()
+        end
+      end
+    )
+  else
+    do_close()
   end
 end
 
@@ -78,16 +111,12 @@ function M.open_editor(file_path)
     return
   end
 
-  -- Check if we are already editing this file in a window to the right
   local target_win = nil
 
-  -- Iterate windows to find if file is open
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     if win ~= win_id then
       local buf = vim.api.nvim_win_get_buf(win)
       local name = vim.api.nvim_buf_get_name(buf)
-      -- Simple check: if path ends with file_path (relative match)
-      -- Robust check: fnamemodify both to absolute
       if name:match(vim.pesc(file_path) .. "$") then
         target_win = win
         break
@@ -97,19 +126,20 @@ function M.open_editor(file_path)
 
   if target_win then
     vim.api.nvim_set_current_win(target_win)
+    editor_win_id = target_win
   else
-    -- Open in new split to the right if sidebar is left
     vim.cmd("wincmd l")
     if vim.api.nvim_get_current_win() == win_id then
-      -- If we didn't move, create new split
       vim.cmd("vnew")
     end
     vim.cmd("edit " .. vim.fn.fnameescape(file_path))
+    editor_win_id = vim.api.nvim_get_current_win()
   end
 
-  -- Render inline diff
   local buf = vim.api.nvim_get_current_buf()
   diff.render_inline(buf, file_path)
+
+  require("resu").register_editor_buffer(buf)
 end
 
 function M.open()
@@ -120,7 +150,6 @@ function M.open()
 
   state.scan_changes()
 
-  -- Create sidebar
   vim.cmd("topleft vnew")
   win_id = vim.api.nvim_get_current_win()
   buf_nr = vim.api.nvim_get_current_buf()
@@ -137,13 +166,39 @@ function M.open()
   vim.api.nvim_win_set_option(win_id, "number", false)
   vim.api.nvim_win_set_option(win_id, "relativenumber", false)
 
+  vim.api.nvim_create_autocmd("WinClosed", {
+    buffer = buf_nr,
+    once = true,
+    callback = function()
+      if has_pending_files() then
+        vim.schedule(function()
+          vim.ui.select(
+            { "Accept All", "Decline All", "Leave as is" },
+            { prompt = "You have pending changes. What would you like to do?" },
+            function(choice)
+              if choice == "Accept All" then
+                require("resu").accept_all()
+              elseif choice == "Decline All" then
+                require("resu").decline_all()
+              end
+              diff.clear_all()
+            end
+          )
+        end)
+      else
+        diff.clear_all()
+      end
+      win_id = nil
+      buf_nr = nil
+      editor_win_id = nil
+    end,
+  })
+
   render()
 
-  -- Trigger diff for first file
   local current = state.get_current_file()
   if current then
     M.open_editor(current.path)
-    -- Return focus to sidebar
     if vim.api.nvim_win_is_valid(win_id) then
       vim.api.nvim_set_current_win(win_id)
     end
@@ -151,7 +206,6 @@ function M.open()
 end
 
 function M.refresh()
-  -- Sync current buffer with disk if needed
   local current = state.get_current_file()
   if current then
     local buf = vim.fn.bufnr(current.path)
@@ -159,7 +213,19 @@ function M.refresh()
       vim.api.nvim_buf_call(buf, function()
         vim.cmd("checktime")
       end)
-      -- Re-render diff immediately
+
+      local file_status = nil
+      for _, file in ipairs(state.get_files()) do
+        if file.path == current.path then
+          file_status = file.status
+          break
+        end
+      end
+
+      if file_status == state.Status.ACCEPTED then
+        state.update_status(current.path, state.Status.PENDING)
+      end
+
       diff.render_inline(buf, current.path)
     end
   end
@@ -185,7 +251,6 @@ function M.update_selection()
   local current = state.get_current_file()
   if current then
     M.open_editor(current.path)
-    -- Return focus to sidebar
     if vim.api.nvim_win_is_valid(win_id) then
       vim.api.nvim_set_current_win(win_id)
     end
