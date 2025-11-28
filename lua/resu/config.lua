@@ -14,7 +14,7 @@ M.defaults = {
   view_mode = "split",
   window = {
     position = "left",
-    width = 30,
+    width = 25,
     border = "rounded",
   },
   keymaps = {

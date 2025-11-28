@@ -1,51 +1,46 @@
 # resu.nvim
 
-**resu.nvim** is a Neovim plugin designed to streamline the workflow of reviewing code changes made by AI CLI tools (like Claude Code, Gemini CLI, etc.). It watches your project for changes and provides an interface to review, accept, or decline them, similar to `git add -p` but for file-level AI modifications.
+A Neovim plugin for reviewing and managing file changes made by AI coding assistants.
+
+## Overview
+
+resu.nvim watches your project directory for file modifications and provides a streamlined interface to review, accept, or decline changes. It helps you maintain control when working with AI tools like Claude Code, Cursor, or similar assistants.
 
 ## Features
 
-- **Real-time File Watching**: Automatically detects changes in your project directory.
-- **Review Interface**: Sidebar UI showing modified files with status indicators.
-- **Diff Integration**: Seamlessly integrates with [Diffview.nvim](https://github.com/sindrets/diffview.nvim) (recommended) or falls back to native vim diffs.
-- **Workflow Actions**: Accept (`<leader>ra`) or Decline (`<leader>cd`) changes quickly.
-- **Git Integration**: Option to auto-stage (`git add`) accepted files.
+- Real-time file watching with automatic change detection
+- Sidebar interface for reviewing modified files
+- Inline diff visualization with syntax highlighting
+- Accept or decline changes per file
+- Persistent state tracking across sessions
+- Git integration support
+
+## Requirements
+
+- Neovim >= 0.8.0
+- Git (for baseline tracking)
+- plenary.nvim (optional, usually already installed)
 
 ## Installation
 
-### Using [lazy.nvim](https://github.com/folke/lazy.nvim)
-
-**Option 1: Install from GitHub (once pushed)**
+Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 {
   "koushikxd/resu.nvim",
-  dependencies = {
-    "sindrets/diffview.nvim", -- Optional but recommended
-    "nvim-lua/plenary.nvim",  -- Required (usually present)
-  },
   config = function()
-    require("resu").setup({
-      -- Configuration options here
-    })
+    require("resu").setup()
   end
 }
 ```
 
-**Option 2: Local Development (Symlink)**
-
-If you want to test the plugin locally without pushing to GitHub first:
+Using [packer.nvim](https://github.com/wbthomason/packer.nvim):
 
 ```lua
-{
-  "resu",
-  dir = "/path/to/resu.nvim", -- Update this path
-  dependencies = {
-    "sindrets/diffview.nvim",
-  },
+use {
+  "koushikxd/resu.nvim",
   config = function()
-    require("resu").setup({
-      watch_dir = vim.fn.getcwd(), -- Start watching cwd immediately
-    })
+    require("resu").setup()
   end
 }
 ```
@@ -56,10 +51,7 @@ Default configuration:
 
 ```lua
 require("resu").setup({
-  -- Directory to watch (nil = cwd)
   watch_dir = nil,
-  
-  -- Patterns to ignore
   ignored_files = {
     "%.git/",
     "node_modules/",
@@ -68,37 +60,91 @@ require("resu").setup({
     "%.DS_Store",
     "%.swp",
   },
-  
-  -- Auto-stage accepted files with git add
   auto_stage = false,
-  
-  -- Keymaps for the review window
+  view_mode = "split",
+  window = {
+    position = "left",
+    width = 25,
+    border = "rounded",
+  },
   keymaps = {
     accept = "<leader>ra",
-    decline = "<leader>cd",
-    next = "<leader>rn",
-    prev = "<leader>rp",
-    accept_file = "<leader>raf",
-    decline_file = "<leader>rdf",
-    refresh = "<leader>rr",
-    quit = "<leader>rq",
+    decline = "<leader>rd",
+    next = "<C-j>",
+    prev = "<C-k>",
+    quit = "q",
   },
 })
 ```
 
+### Configuration Options
+
+- `watch_dir`: Directory to watch for changes. Defaults to current working directory.
+- `ignored_files`: Patterns of files to ignore. Uses Lua pattern matching.
+- `auto_stage`: Automatically stage accepted files with `git add`.
+- `window.position`: Position of the review sidebar.
+- `window.width`: Width of the review sidebar in columns.
+- `window.border`: Border style for the window.
+- `keymaps`: Key mappings for review actions (active when review panel is open).
+
 ## Usage
 
-1. Run your AI tool (e.g., `claude-code "refactor this file"`).
-2. Changes are detected automatically.
-3. Open the review panel: `:AIReviewOpen` (or bind a key).
-4. Navigate the list. The diff view will open automatically for the selected file.
-5. Use keymaps to Accept or Decline changes.
+### Basic Workflow
 
-## Commands
+1. Open the review panel:
+   
+```vim
+:ResuToggle
+```
 
-- `:AIReviewOpen` - Open the review panel
-- `:AIReviewToggle` - Toggle the review panel
-- `:AIReviewReset` - Clear the list of changed files
+2. Navigate through changed files using `<C-j>` and `<C-k>` or `j` and `k`.
+
+3. Review the inline diff for each file.
+
+4. Accept changes with `<leader>ra` or decline with `<leader>rd`.
+
+5. Close the panel with `q` or `:ResuToggle`.
+
+### Commands
+
+- `:ResuOpen` - Open the review panel
+- `:ResuClose` - Close the review panel
+- `:ResuToggle` - Toggle the review panel
+- `:ResuNext` - Jump to next changed file
+- `:ResuPrev` - Jump to previous changed file
+- `:ResuAccept` - Accept changes in current file
+- `:ResuDecline` - Decline changes in current file
+- `:ResuAcceptAll` - Accept all pending changes
+- `:ResuDeclineAll` - Decline all pending changes
+- `:ResuReset` - Reset all file states
+
+### Default Keymaps
+
+When the review panel is open:
+
+- `<leader>ra` - Accept current file changes
+- `<leader>rd` - Decline current file changes
+- `<C-j>` or `j` - Next file
+- `<C-k>` or `k` - Previous file
+- `<CR>` - Open current file in editor
+- `q` - Close review panel
+- `<leader>rt` - Toggle review panel (global)
+
+## How It Works
+
+1. resu.nvim monitors your project directory for file changes using filesystem events.
+2. When a change is detected, it captures a baseline snapshot of the file.
+3. Changes are displayed in a sidebar with inline diffs showing additions and deletions.
+4. Accepting a change keeps the modifications and removes tracking.
+5. Declining a change reverts the file to its baseline state.
+6. State persists across Neovim sessions until explicitly cleared.
+
+## Use Cases
+
+- Reviewing AI-generated code changes before committing
+- Managing incremental modifications from AI coding assistants
+- Keeping control over file-level changes in collaborative AI workflows
+- Quick approval or rejection of automated refactoring
 
 ## License
 

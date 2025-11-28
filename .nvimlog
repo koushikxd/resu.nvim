@@ -1,0 +1,2 @@
+WRN 2025-11-29T01:06:32.046 ?.19409    server_start:193: Failed to start server: operation not permitted: /var/folders/ff/278b3l5j2_9cghn2pq58fnkc0000gn/T/nvim.koushik/dQDPuA/nvim.19409.0
+WRN 2025-11-29T01:06:32.095 ?.19427    server_start:193: Failed to start server: operation not permitted: /var/folders/ff/278b3l5j2_9cghn2pq58fnkc0000gn/T/nvim.koushik/f8BGc6/nvim.19427.0
