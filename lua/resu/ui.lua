@@ -144,8 +144,6 @@ function M.open_editor(file_path)
   else
     diff.clear(buf)
   end
-
-  require("resu").register_editor_buffer(buf)
 end
 
 function M.open()
@@ -237,6 +235,10 @@ local function force_reload_buffer(buf, file_path)
 end
 
 function M.refresh()
+  if not M.is_open() then
+    return
+  end
+
   local files = state.get_files()
   for _, file in ipairs(files) do
     local buf = vim.fn.bufnr(file.path)
@@ -251,11 +253,9 @@ function M.refresh()
   end
 
   state.scan_changes()
-  if M.is_open() then
-    vim.schedule(function()
-      render()
-    end)
-  end
+  vim.schedule(function()
+    render()
+  end)
 end
 
 function M.toggle()

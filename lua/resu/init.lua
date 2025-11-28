@@ -6,26 +6,6 @@ local watcher = require("resu.watcher")
 local ui = require("resu.ui")
 local diff = require("resu.diff")
 
-local reviewed_buffers = {}
-
-local function setup_editor_keymaps(buf)
-  if reviewed_buffers[buf] then
-    return
-  end
-  reviewed_buffers[buf] = true
-
-  local maps = config_module.defaults.keymaps
-  local opts = { buffer = buf, silent = true, nowait = true }
-
-  vim.keymap.set("n", maps.accept, function()
-    M.accept()
-  end, opts)
-
-  vim.keymap.set("n", maps.decline, function()
-    M.decline()
-  end, opts)
-end
-
 local function has_pending_files()
   local files = state.get_files()
   for _, file in ipairs(files) do
@@ -77,17 +57,23 @@ function M.setup(opts)
     end
   end, { silent = true, desc = "Resu: Previous file" })
 
+  vim.keymap.set("n", maps.accept, function()
+    if ui.is_open() then
+      M.accept()
+    end
+  end, { silent = true, desc = "Resu: Accept changes" })
+
+  vim.keymap.set("n", maps.decline, function()
+    if ui.is_open() then
+      M.decline()
+    end
+  end, { silent = true, desc = "Resu: Decline changes" })
+
   vim.api.nvim_create_autocmd("FileType", {
     pattern = "resu-review",
     callback = function(ev)
       local buf_opts = { buffer = ev.buf, silent = true, nowait = true }
 
-      vim.keymap.set("n", maps.accept, function()
-        M.accept()
-      end, buf_opts)
-      vim.keymap.set("n", maps.decline, function()
-        M.decline()
-      end, buf_opts)
       vim.keymap.set("n", maps.quit, function()
         M.close()
       end, buf_opts)
@@ -102,10 +88,6 @@ function M.setup(opts)
       end, buf_opts)
     end,
   })
-end
-
-function M.register_editor_buffer(buf)
-  setup_editor_keymaps(buf)
 end
 
 function M.open()
@@ -151,6 +133,9 @@ function M.accept()
     local buf = vim.fn.bufnr(path)
     if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
       diff.clear(buf)
+      vim.api.nvim_buf_call(buf, function()
+        vim.cmd("silent write")
+      end)
     end
 
     state.update_status(path, state.Status.ACCEPTED)
@@ -165,28 +150,39 @@ function M.decline()
   local current = state.get_current_file()
   if current then
     local path = current.path
-    local cmd = "git show HEAD:" .. vim.fn.shellescape(path)
-    local original_lines = vim.fn.systemlist(cmd)
+    local baseline = state.get_baseline_content(path)
+    local original_lines
 
-    if vim.v.shell_error == 0 then
-      local f = io.open(path, "w")
-      if f then
-        f:write(table.concat(original_lines, "\n"))
-        f:close()
-
-        local buf = vim.fn.bufnr(path)
-        if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
-          vim.api.nvim_buf_set_lines(buf, 0, -1, false, original_lines)
-          diff.clear(buf)
-        end
-        state.update_status(path, state.Status.DECLINED)
-        vim.notify("Resu: Reverted " .. path, vim.log.levels.INFO)
-        ui.update_selection()
-      else
-        vim.notify("Resu: Failed to revert " .. path, vim.log.levels.ERROR)
+    if baseline then
+      original_lines = vim.split(baseline, "\n", { plain = true })
+      if original_lines[#original_lines] == "" then
+        table.remove(original_lines)
       end
     else
-      vim.notify("Resu: Could not revert (not in HEAD?)", vim.log.levels.WARN)
+      local cmd = "git show HEAD:" .. vim.fn.shellescape(path)
+      original_lines = vim.fn.systemlist(cmd)
+      if vim.v.shell_error ~= 0 then
+        vim.notify("Resu: Could not revert (not in HEAD and no baseline)", vim.log.levels.WARN)
+        return
+      end
+    end
+
+    local f = io.open(path, "w")
+    if f then
+      f:write(table.concat(original_lines, "\n"))
+      f:close()
+
+      local buf = vim.fn.bufnr(path)
+      if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
+        vim.api.nvim_buf_set_lines(buf, 0, -1, false, original_lines)
+        vim.api.nvim_buf_set_option(buf, "modified", false)
+        diff.clear(buf)
+      end
+      state.update_status(path, state.Status.DECLINED)
+      vim.notify("Resu: Reverted " .. path, vim.log.levels.INFO)
+      ui.update_selection()
+    else
+      vim.notify("Resu: Failed to revert " .. path, vim.log.levels.ERROR)
     end
   end
 end
@@ -205,6 +201,9 @@ function M.accept_all()
     local buf = vim.fn.bufnr(path)
     if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
       diff.clear(buf)
+      vim.api.nvim_buf_call(buf, function()
+        vim.cmd("silent write")
+      end)
     end
     state.update_status(path, state.Status.ACCEPTED)
     count = count + 1
@@ -225,24 +224,40 @@ function M.decline_all()
 
   local count = 0
   for _, path in ipairs(paths) do
-    local cmd = "git show HEAD:" .. vim.fn.shellescape(path)
-    local original_lines = vim.fn.systemlist(cmd)
+    local baseline = state.get_baseline_content(path)
+    local original_lines
 
-    if vim.v.shell_error == 0 then
-      local f = io.open(path, "w")
-      if f then
-        f:write(table.concat(original_lines, "\n"))
-        f:close()
-
-        local buf = vim.fn.bufnr(path)
-        if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
-          vim.api.nvim_buf_set_lines(buf, 0, -1, false, original_lines)
-          diff.clear(buf)
-        end
+    if baseline then
+      original_lines = vim.split(baseline, "\n", { plain = true })
+      if original_lines[#original_lines] == "" then
+        table.remove(original_lines)
+      end
+    else
+      local cmd = "git show HEAD:" .. vim.fn.shellescape(path)
+      original_lines = vim.fn.systemlist(cmd)
+      if vim.v.shell_error ~= 0 then
+        state.update_status(path, state.Status.DECLINED)
+        count = count + 1
+        goto continue
       end
     end
+
+    local f = io.open(path, "w")
+    if f then
+      f:write(table.concat(original_lines, "\n"))
+      f:close()
+
+      local buf = vim.fn.bufnr(path)
+      if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
+        vim.api.nvim_buf_set_lines(buf, 0, -1, false, original_lines)
+        vim.api.nvim_buf_set_option(buf, "modified", false)
+        diff.clear(buf)
+      end
+    end
+
     state.update_status(path, state.Status.DECLINED)
     count = count + 1
+    ::continue::
   end
 
   ui.update_selection()
@@ -253,7 +268,6 @@ function M.reset()
   state.reset()
   state.clear_persistent_state()
   diff.clear_all()
-  reviewed_buffers = {}
   ui.refresh()
   vim.notify("Resu: State reset", vim.log.levels.INFO)
 end
