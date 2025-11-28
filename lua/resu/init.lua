@@ -42,6 +42,16 @@ local function setup_editor_keymaps(buf)
   end, opts)
 end
 
+local function has_pending_files()
+  local files = state.get_files()
+  for _, file in ipairs(files) do
+    if file.status == state.Status.PENDING then
+      return true
+    end
+  end
+  return false
+end
+
 function M.setup(opts)
   config_module.defaults = vim.tbl_deep_extend("force", config_module.defaults, opts or {})
 
@@ -49,6 +59,25 @@ function M.setup(opts)
   watcher.start(dir, function()
     ui.refresh()
   end)
+
+  vim.api.nvim_create_autocmd("VimLeavePre", {
+    callback = function()
+      if ui.is_open() and has_pending_files() then
+        local choice = vim.fn.confirm(
+          "Resu: You have pending changes. What would you like to do?",
+          "&Accept All\n&Decline All\n&Cancel",
+          3
+        )
+        if choice == 1 then
+          M.accept_all()
+        elseif choice == 2 then
+          M.decline_all()
+        elseif choice == 3 then
+          vim.cmd("throw 'Resu: Exit cancelled'")
+        end
+      end
+    end,
+  })
 
   vim.api.nvim_create_autocmd("FileType", {
     pattern = "resu-review",
@@ -135,8 +164,11 @@ function M.accept()
       diff.clear(buf)
     end
 
+    vim.notify("Resu: Accepted " .. current.path, vim.log.levels.INFO)
     ui.refresh()
     M.next()
+  else
+    vim.notify("Resu: No file selected", vim.log.levels.WARN)
   end
 end
 
@@ -230,6 +262,7 @@ end
 
 function M.accept_all()
   local files = state.get_files()
+  local count = 0
   for _, file in ipairs(files) do
     if file.status == state.Status.PENDING then
       state.update_status(file.path, state.Status.ACCEPTED)
@@ -237,13 +270,16 @@ function M.accept_all()
       if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
         diff.clear(buf)
       end
+      count = count + 1
     end
   end
   ui.refresh()
+  vim.notify("Resu: Accepted all changes (" .. count .. " files)", vim.log.levels.INFO)
 end
 
 function M.decline_all()
   local files = state.get_files()
+  local count = 0
   for _, file in ipairs(files) do
     if file.status == state.Status.PENDING then
       local cmd = "git show HEAD:" .. vim.fn.shellescape(file.path)
@@ -263,9 +299,11 @@ function M.decline_all()
         end
       end
       state.update_status(file.path, state.Status.DECLINED)
+      count = count + 1
     end
   end
   ui.refresh()
+  vim.notify("Resu: Declined all changes (" .. count .. " files)", vim.log.levels.INFO)
 end
 
 function M.reset()

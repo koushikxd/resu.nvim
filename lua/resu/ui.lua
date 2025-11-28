@@ -137,7 +137,13 @@ function M.open_editor(file_path)
   end
 
   local buf = vim.api.nvim_get_current_buf()
-  diff.render_inline(buf, file_path)
+
+  local current_file = state.get_current_file()
+  if current_file and current_file.status == state.Status.PENDING then
+    diff.render_inline(buf, file_path)
+  else
+    diff.clear(buf)
+  end
 
   require("resu").register_editor_buffer(buf)
 end
@@ -214,19 +220,9 @@ function M.refresh()
         vim.cmd("checktime")
       end)
 
-      local file_status = nil
-      for _, file in ipairs(state.get_files()) do
-        if file.path == current.path then
-          file_status = file.status
-          break
-        end
+      if current.status == state.Status.PENDING then
+        diff.render_inline(buf, current.path)
       end
-
-      if file_status == state.Status.ACCEPTED then
-        state.update_status(current.path, state.Status.PENDING)
-      end
-
-      diff.render_inline(buf, current.path)
     end
   end
 
