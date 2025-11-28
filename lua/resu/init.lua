@@ -1,3 +1,7 @@
+---@module resu
+--- Main entry point and public API for the Resu plugin.
+--- Coordinates between state, UI, diff rendering, and file watching.
+--- All user-facing commands and keymaps are wired through this module.
 local M = {}
 
 local config_module = require("resu.config")

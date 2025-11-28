@@ -1,3 +1,6 @@
+---@module resu.config
+--- Default configuration values for Resu.
+--- Users override these via require("resu").setup({ ... })
 local M = {}
 
 M.defaults = {

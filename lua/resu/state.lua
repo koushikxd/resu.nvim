@@ -1,3 +1,9 @@
+---@module resu.state
+--- Manages file tracking and persistent state across Neovim sessions.
+--- Handles two types of state:
+---   1. Session state (in-memory): current file list and selection index
+---   2. Persistent state (on disk): tracks which files have been reviewed
+---      to avoid re-prompting for already accepted/declined files
 local M = {}
 
 M.Status = {
@@ -11,6 +17,7 @@ local state = {
   current_idx = 1,
 }
 
+--- Persistent state is keyed by project (cwd) to support multiple projects
 local persistent_state = {}
 local state_file_path = nil
 local baselines_dir = nil
@@ -33,6 +40,8 @@ local function get_project_key()
   return vim.fn.getcwd()
 end
 
+--- Simple hash to detect if file content changed since last review.
+--- Used to determine if a previously reviewed file needs re-review.
 local function compute_file_hash(path)
   local file = io.open(path, "r")
   if not file then
@@ -54,6 +63,9 @@ local function get_baseline_path(project, file_path)
   return get_baselines_dir() .. "/" .. safe_project .. "/" .. safe_file
 end
 
+--- Saves a copy of the file content at review time.
+--- This baseline is used for "decline" to restore original content,
+--- especially for untracked files that aren't in git HEAD.
 local function save_baseline_content(project, file_path)
   local baseline_path = get_baseline_path(project, file_path)
   local dir = vim.fn.fnamemodify(baseline_path, ":h")
@@ -169,6 +181,8 @@ local function save_file_state(path, status)
   end
 end
 
+--- Removes tracking for files that are no longer modified (e.g., committed).
+--- Called during scan_changes to keep persistent state clean.
 local function cleanup_committed_files(modified_files_set)
   local project = get_project_key()
   if not persistent_state[project] then

@@ -1,3 +1,5 @@
+--- Plugin loader: registers user commands and default keymap.
+--- This file is auto-loaded by Neovim's plugin system.
 if vim.g.loaded_resu then
   return
 end

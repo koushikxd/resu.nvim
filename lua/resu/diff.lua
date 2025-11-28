@@ -1,3 +1,7 @@
+---@module resu.diff
+--- Renders inline diffs using extmarks (virtual text).
+--- Compares current buffer content against baseline (saved snapshot or git HEAD).
+--- Deleted lines appear as virtual lines above, added lines get background highlight.
 local M = {}
 
 local ns_id = vim.api.nvim_create_namespace("resu_inline_diff")
@@ -5,6 +9,7 @@ local ns_id = vim.api.nvim_create_namespace("resu_inline_diff")
 vim.api.nvim_set_hl(0, "ResuDiffAdd", { bg = "#1e3a1e", fg = "#a6e3a1" })
 vim.api.nvim_set_hl(0, "ResuDiffDelete", { bg = "#3d1f1f", fg = "#f38ba8" })
 
+--- Track active buffers and their diff data for cleanup
 local active_buffers = {}
 local buffer_hunks = {}
 local buffer_original = {}
@@ -25,6 +30,8 @@ function M.get_original_lines(buf)
   return buffer_original[buf] or {}
 end
 
+--- Main diff rendering function. Gets original content from baseline or git HEAD,
+--- computes hunks using vim.diff, then renders with extmarks.
 function M.render_inline(buf, file_path)
   if not buf or not vim.api.nvim_buf_is_valid(buf) then
     return
@@ -56,6 +63,7 @@ function M.render_inline(buf, file_path)
   local current_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   local current_text = table.concat(current_lines, "\n")
 
+  --- vim.diff returns indices: { start_a, count_a, start_b, count_b } for each hunk
   local raw_hunks = vim.diff(original_text, current_text, { result_type = "indices" })
 
   if not raw_hunks then

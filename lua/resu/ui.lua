@@ -1,8 +1,13 @@
+---@module resu.ui
+--- Handles the review panel UI and editor window management.
+--- Creates a sidebar listing changed files and coordinates with diff module
+--- to show inline changes in the editor split.
 local M = {}
 local state = require("resu.state")
 local config = require("resu.config").defaults
 local diff = require("resu.diff")
 
+--- Window/buffer handles for the file list panel and editor
 local buf_nr = nil
 local win_id = nil
 local _editor_win_id = nil
