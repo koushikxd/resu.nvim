@@ -20,8 +20,8 @@ M.defaults = {
   keymaps = {
     accept = "<leader>ra",
     decline = "<leader>rd",
-    next = "n",
-    prev = "N",
+    next = "<C-j>",
+    prev = "<C-k>",
     quit = "q",
   },
 }

@@ -63,10 +63,23 @@ function M.setup(opts)
     end,
   })
 
+  local maps = config_module.defaults.keymaps
+
+  vim.keymap.set("n", maps.next, function()
+    if ui.is_open() then
+      M.next()
+    end
+  end, { silent = true, desc = "Resu: Next file" })
+
+  vim.keymap.set("n", maps.prev, function()
+    if ui.is_open() then
+      M.prev()
+    end
+  end, { silent = true, desc = "Resu: Previous file" })
+
   vim.api.nvim_create_autocmd("FileType", {
     pattern = "resu-review",
     callback = function(ev)
-      local maps = config_module.defaults.keymaps
       local buf_opts = { buffer = ev.buf, silent = true, nowait = true }
 
       vim.keymap.set("n", maps.accept, function()
@@ -74,12 +87,6 @@ function M.setup(opts)
       end, buf_opts)
       vim.keymap.set("n", maps.decline, function()
         M.decline()
-      end, buf_opts)
-      vim.keymap.set("n", maps.next, function()
-        M.next()
-      end, buf_opts)
-      vim.keymap.set("n", maps.prev, function()
-        M.prev()
       end, buf_opts)
       vim.keymap.set("n", maps.quit, function()
         M.close()
@@ -140,16 +147,15 @@ end
 function M.accept()
   local current = state.get_current_file()
   if current then
-    state.update_status(current.path, state.Status.ACCEPTED)
-
-    local buf = vim.fn.bufnr(current.path)
+    local path = current.path
+    local buf = vim.fn.bufnr(path)
     if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
       diff.clear(buf)
     end
 
-    vim.notify("Resu: Accepted " .. current.path, vim.log.levels.INFO)
-    ui.refresh()
-    M.next()
+    state.update_status(path, state.Status.ACCEPTED)
+    vim.notify("Resu: Accepted " .. path, vim.log.levels.INFO)
+    ui.update_selection()
   else
     vim.notify("Resu: No file selected", vim.log.levels.WARN)
   end
@@ -158,83 +164,94 @@ end
 function M.decline()
   local current = state.get_current_file()
   if current then
-    state.update_status(current.path, state.Status.DECLINED)
-
-    local cmd = "git show HEAD:" .. vim.fn.shellescape(current.path)
+    local path = current.path
+    local cmd = "git show HEAD:" .. vim.fn.shellescape(path)
     local original_lines = vim.fn.systemlist(cmd)
 
     if vim.v.shell_error == 0 then
-      local f = io.open(current.path, "w")
+      local f = io.open(path, "w")
       if f then
         f:write(table.concat(original_lines, "\n"))
         f:close()
 
-        local buf = vim.fn.bufnr(current.path)
+        local buf = vim.fn.bufnr(path)
         if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
           vim.api.nvim_buf_set_lines(buf, 0, -1, false, original_lines)
           diff.clear(buf)
         end
-        vim.notify("Resu: Reverted " .. current.path, vim.log.levels.INFO)
+        state.update_status(path, state.Status.DECLINED)
+        vim.notify("Resu: Reverted " .. path, vim.log.levels.INFO)
+        ui.update_selection()
       else
-        vim.notify("Resu: Failed to revert " .. current.path, vim.log.levels.ERROR)
+        vim.notify("Resu: Failed to revert " .. path, vim.log.levels.ERROR)
       end
     else
       vim.notify("Resu: Could not revert (not in HEAD?)", vim.log.levels.WARN)
     end
-
-    ui.refresh()
-    M.next()
   end
 end
 
 function M.accept_all()
   local files = state.get_files()
-  local count = 0
+  local paths = {}
   for _, file in ipairs(files) do
     if file.status == state.Status.PENDING then
-      state.update_status(file.path, state.Status.ACCEPTED)
-      local buf = vim.fn.bufnr(file.path)
-      if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
-        diff.clear(buf)
-      end
-      count = count + 1
+      table.insert(paths, file.path)
     end
   end
-  ui.refresh()
+
+  local count = 0
+  for _, path in ipairs(paths) do
+    local buf = vim.fn.bufnr(path)
+    if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
+      diff.clear(buf)
+    end
+    state.update_status(path, state.Status.ACCEPTED)
+    count = count + 1
+  end
+
+  ui.update_selection()
   vim.notify("Resu: Accepted all changes (" .. count .. " files)", vim.log.levels.INFO)
 end
 
 function M.decline_all()
   local files = state.get_files()
-  local count = 0
+  local paths = {}
   for _, file in ipairs(files) do
     if file.status == state.Status.PENDING then
-      local cmd = "git show HEAD:" .. vim.fn.shellescape(file.path)
-      local original_lines = vim.fn.systemlist(cmd)
-
-      if vim.v.shell_error == 0 then
-        local f = io.open(file.path, "w")
-        if f then
-          f:write(table.concat(original_lines, "\n"))
-          f:close()
-
-          local buf = vim.fn.bufnr(file.path)
-          if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
-            vim.api.nvim_buf_set_lines(buf, 0, -1, false, original_lines)
-            diff.clear(buf)
-          end
-        end
-      end
-      state.update_status(file.path, state.Status.DECLINED)
-      count = count + 1
+      table.insert(paths, file.path)
     end
   end
-  ui.refresh()
+
+  local count = 0
+  for _, path in ipairs(paths) do
+    local cmd = "git show HEAD:" .. vim.fn.shellescape(path)
+    local original_lines = vim.fn.systemlist(cmd)
+
+    if vim.v.shell_error == 0 then
+      local f = io.open(path, "w")
+      if f then
+        f:write(table.concat(original_lines, "\n"))
+        f:close()
+
+        local buf = vim.fn.bufnr(path)
+        if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
+          vim.api.nvim_buf_set_lines(buf, 0, -1, false, original_lines)
+          diff.clear(buf)
+        end
+      end
+    end
+    state.update_status(path, state.Status.DECLINED)
+    count = count + 1
+  end
+
+  ui.update_selection()
   vim.notify("Resu: Declined all changes (" .. count .. " files)", vim.log.levels.INFO)
 end
 
 function M.reset()
   state.reset()
+  state.clear_persistent_state()
   diff.clear_all()
   reviewed_buffers = {}
   ui.refresh()

@@ -33,12 +33,25 @@ function M.render_inline(buf, file_path)
     return
   end
 
-  local cmd = "git show HEAD:" .. vim.fn.shellescape(file_path)
-  local original_lines = vim.fn.systemlist(cmd)
-  if vim.v.shell_error ~= 0 then
-    original_lines = {}
+  local state = require("resu.state")
+  local baseline_content = state.get_baseline_content(file_path)
+
+  local original_text
+  local original_lines
+  if baseline_content then
+    original_text = baseline_content
+    original_lines = vim.split(baseline_content, "\n", { plain = true })
+    if original_lines[#original_lines] == "" then
+      table.remove(original_lines)
+    end
+  else
+    local cmd = "git show HEAD:" .. vim.fn.shellescape(file_path)
+    original_lines = vim.fn.systemlist(cmd)
+    if vim.v.shell_error ~= 0 then
+      original_lines = {}
+    end
+    original_text = table.concat(original_lines, "\n")
   end
-  local original_text = table.concat(original_lines, "\n")
 
   local current_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   local current_text = table.concat(current_lines, "\n")
