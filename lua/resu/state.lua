@@ -295,6 +295,10 @@ function M.add_or_update_file(path)
 
   local project = get_project_key()
   if persistent_state[project] and persistent_state[project][rel_path] then
+    local current_hash = compute_file_hash(rel_path)
+    if current_hash and persistent_state[project][rel_path].hash == current_hash then
+      return
+    end
     persistent_state[project][rel_path] = nil
     M.save_persistent_state()
   end

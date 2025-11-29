@@ -179,6 +179,11 @@ function M.open()
     buffer = buf_nr,
     once = true,
     callback = function()
+      diff.clear_all()
+      win_id = nil
+      buf_nr = nil
+      _editor_win_id = nil
+
       if has_pending_files() then
         vim.schedule(function()
           vim.ui.select(
@@ -190,16 +195,10 @@ function M.open()
               elseif choice == "Decline All" then
                 require("resu").decline_all()
               end
-              diff.clear_all()
             end
           )
         end)
-      else
-        diff.clear_all()
       end
-      win_id = nil
-      buf_nr = nil
-      _editor_win_id = nil
     end,
   })
 
