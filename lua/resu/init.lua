@@ -137,9 +137,13 @@ function M.accept()
     local buf = vim.fn.bufnr(path)
     if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
       diff.clear(buf)
-      vim.api.nvim_buf_call(buf, function()
-        vim.cmd("silent write")
-      end)
+      local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+      local f = io.open(path, "w")
+      if f then
+        f:write(table.concat(lines, "\n") .. "\n")
+        f:close()
+        vim.api.nvim_buf_set_option(buf, "modified", false)
+      end
     end
 
     state.update_status(path, state.Status.ACCEPTED)
@@ -205,9 +209,13 @@ function M.accept_all()
     local buf = vim.fn.bufnr(path)
     if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
       diff.clear(buf)
-      vim.api.nvim_buf_call(buf, function()
-        vim.cmd("silent write")
-      end)
+      local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+      local f = io.open(path, "w")
+      if f then
+        f:write(table.concat(lines, "\n") .. "\n")
+        f:close()
+        vim.api.nvim_buf_set_option(buf, "modified", false)
+      end
     end
     state.update_status(path, state.Status.ACCEPTED)
     count = count + 1
