@@ -184,6 +184,9 @@ function M.decline()
       if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
         vim.api.nvim_buf_set_lines(buf, 0, -1, false, original_lines)
         vim.api.nvim_buf_set_option(buf, "modified", false)
+        vim.api.nvim_buf_call(buf, function()
+          vim.cmd("silent! checktime")
+        end)
         diff.clear(buf)
       end
       state.update_status(path, state.Status.DECLINED)
@@ -263,6 +266,9 @@ function M.decline_all()
       if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
         vim.api.nvim_buf_set_lines(buf, 0, -1, false, original_lines)
         vim.api.nvim_buf_set_option(buf, "modified", false)
+        vim.api.nvim_buf_call(buf, function()
+          vim.cmd("silent! checktime")
+        end)
         diff.clear(buf)
       end
     end

@@ -1,19 +1,10 @@
 # resu.nvim
 
-A Neovim plugin for reviewing and managing file changes made by AI coding assistants.
+A Neovim plugin for reviewing and managing file changes made by AI coding cli tools.
 
 ## Overview
 
 resu.nvim watches your project directory for file modifications and provides a streamlined interface to review, accept, or decline changes. It helps you maintain control when working with AI tools like Claude Code, Cursor CLI, or similar assistants.
-
-## Features
-
-- Real-time file watching with automatic change detection
-- Sidebar interface for reviewing modified files
-- Inline diff visualization with syntax highlighting
-- Accept or decline changes per file
-- Persistent state tracking across sessions
-- Git integration support
 
 ## Requirements
 
@@ -44,6 +35,15 @@ use {
   end
 }
 ```
+
+## Features
+
+- Real-time file watching with automatic change detection
+- Sidebar interface for reviewing modified files
+- Inline diff visualization with syntax highlighting
+- Accept or decline changes per file
+- Persistent state tracking across sessions
+- Git integration support
 
 ## Configuration
 

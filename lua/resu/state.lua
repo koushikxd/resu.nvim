@@ -364,15 +364,11 @@ function M.prev_file()
 end
 
 function M.update_status(path, status)
-  for i, file in ipairs(state.files) do
+  for _, file in ipairs(state.files) do
     if file.path == path then
       file.status = status
       if status == M.Status.ACCEPTED or status == M.Status.DECLINED then
         save_file_state(path, status)
-        table.remove(state.files, i)
-        if state.current_idx > #state.files then
-          state.current_idx = math.max(1, #state.files)
-        end
       end
       return true
     end
