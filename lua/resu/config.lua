@@ -1,9 +1,9 @@
----@module resu.config
---- Default configuration values for Resu.
---- Users override these via require("resu").setup({ ... })
 local M = {}
 
 M.defaults = {
+  use_diffview = true,
+  hot_reload = true,
+  debounce_ms = 100,
   watch_dir = nil,
   ignored_files = {
     "%.git/",
@@ -13,18 +13,13 @@ M.defaults = {
     "%.DS_Store",
     "%.swp",
   },
-  auto_stage = false,
-  view_mode = "split",
-  window = {
-    position = "left",
-    width = 25,
-    border = "rounded",
-  },
   keymaps = {
+    toggle = "<leader>rt",
     accept = "<leader>ra",
     decline = "<leader>rd",
-    next = "<C-j>",
-    prev = "<C-k>",
+    accept_all = "<leader>rA",
+    decline_all = "<leader>rD",
+    refresh = "<leader>rr",
     quit = "q",
   },
 }

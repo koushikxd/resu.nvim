@@ -1,13 +1,8 @@
----@module resu.ui
---- Handles the review panel UI and editor window management.
---- Creates a sidebar listing changed files and coordinates with diff module
---- to show inline changes in the editor split.
 local M = {}
 local state = require("resu.state")
 local config = require("resu.config").defaults
 local diff = require("resu.diff")
 
---- Window/buffer handles for the file list panel and editor
 local buf_nr = nil
 local win_id = nil
 local _editor_win_id = nil
@@ -169,7 +164,7 @@ function M.open()
   vim.api.nvim_buf_set_option(buf_nr, "bufhidden", "wipe")
   vim.api.nvim_buf_set_option(buf_nr, "filetype", "resu-review")
 
-  vim.api.nvim_win_set_width(win_id, config.window.width)
+  vim.api.nvim_win_set_width(win_id, 25)
   vim.api.nvim_win_set_option(win_id, "wrap", false)
   vim.api.nvim_win_set_option(win_id, "cursorline", true)
   vim.api.nvim_win_set_option(win_id, "number", false)
@@ -201,6 +196,29 @@ function M.open()
       end
     end,
   })
+
+  local maps = config.keymaps
+
+  local buf_opts = { buffer = buf_nr, silent = true, nowait = true }
+  vim.keymap.set("n", maps.quit, function()
+    M.close()
+  end, buf_opts)
+  vim.keymap.set("n", "<CR>", function()
+    local current = state.get_current_file()
+    if current then
+      M.open_editor(current.path)
+    end
+  end, buf_opts)
+  vim.keymap.set("n", "j", function()
+    if state.next_file() then
+      M.update_selection()
+    end
+  end, buf_opts)
+  vim.keymap.set("n", "k", function()
+    if state.prev_file() then
+      M.update_selection()
+    end
+  end, buf_opts)
 
   render()
 
@@ -275,7 +293,7 @@ function M.update_selection()
   local current = state.get_current_file()
   if current then
     M.open_editor(current.path)
-    if vim.api.nvim_win_is_valid(win_id) then
+    if win_id and vim.api.nvim_win_is_valid(win_id) then
       vim.api.nvim_set_current_win(win_id)
     end
   end
