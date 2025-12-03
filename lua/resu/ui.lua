@@ -1,3 +1,6 @@
+-- Legacy sidebar UI (used when diffview.nvim is unavailable)
+-- Displays file list and manages editor split
+
 local M = {}
 local state = require("resu.state")
 local config = require("resu.config").defaults

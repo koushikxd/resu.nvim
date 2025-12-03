@@ -1,3 +1,6 @@
+-- State management for tracked files (legacy UI mode)
+-- Stores file list, status, and navigation index
+
 local M = {}
 
 M.Status = {

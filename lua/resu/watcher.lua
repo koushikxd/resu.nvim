@@ -1,3 +1,6 @@
+-- File system watcher using libuv
+-- Monitors directory for changes and triggers hot reload
+
 local M = {}
 
 local uv = vim.loop or vim.uv

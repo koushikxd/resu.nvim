@@ -1,3 +1,6 @@
+-- Main entry point for resu.nvim
+-- Handles setup, keymaps, and delegates to diffview or legacy UI
+
 local M = {}
 
 local config_module = require("resu.config")

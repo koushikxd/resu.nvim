@@ -1,3 +1,5 @@
+-- Default configuration options
+
 local M = {}
 
 M.defaults = {

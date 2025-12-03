@@ -1,3 +1,6 @@
+-- Inline diff rendering using extmarks (legacy UI mode)
+-- Shows additions/deletions as virtual text
+
 local M = {}
 
 local ns_id = vim.api.nvim_create_namespace("resu_inline_diff")
@@ -161,7 +164,10 @@ function M.has_pending_hunks(buf)
 end
 
 function M.clear(buf)
-  if buf and vim.api.nvim_buf_is_valid(buf) then
+  if not buf then
+    return
+  end
+  if vim.api.nvim_buf_is_valid(buf) then
     vim.api.nvim_buf_clear_namespace(buf, ns_id, 0, -1)
   end
   buffer_hunks[buf] = nil

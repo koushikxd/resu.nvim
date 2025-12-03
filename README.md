@@ -1,16 +1,16 @@
 # resu.nvim
 
-A Neovim plugin for reviewing and managing file changes made by AI coding cli tools.
+A Neovim plugin for reviewing and managing file changes made by AI coding CLI tools.
 
 ## Overview
 
-resu.nvim watches your project directory for file modifications and provides a streamlined interface to review, accept, or decline changes. It helps you maintain control when working with AI tools like Claude Code, Cursor CLI, or similar assistants.
+resu.nvim watches your project directory for file modifications and provides a streamlined interface to review, accept, or decline changes. It integrates seamlessly with [diffview.nvim](https://github.com/sindrets/diffview.nvim) for a powerful diff experience, while also providing a built-in fallback UI.
 
 ## Requirements
 
 - Neovim >= 0.8.0
-- Git (for baseline tracking)
-- plenary.nvim (optional, usually already installed)
+- Git (for diff and revert operations)
+- [diffview.nvim](https://github.com/sindrets/diffview.nvim) (recommended, optional)
 
 ## Installation
 
@@ -19,9 +19,12 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 ```lua
 {
   "koushikxd/resu.nvim",
+  dependencies = {
+    "sindrets/diffview.nvim",
+  },
   config = function()
     require("resu").setup()
-  end
+  end,
 }
 ```
 
@@ -30,20 +33,21 @@ Using [packer.nvim](https://github.com/wbthomason/packer.nvim):
 ```lua
 use {
   "koushikxd/resu.nvim",
+  requires = { "sindrets/diffview.nvim" },
   config = function()
     require("resu").setup()
-  end
+  end,
 }
 ```
 
 ## Features
 
-- Real-time file watching with automatic change detection
-- Sidebar interface for reviewing modified files
-- Inline diff visualization with syntax highlighting
-- Accept or decline changes per file
-- Persistent state tracking across sessions
-- Git integration support
+- **Diffview Integration**: Uses diffview.nvim for a feature-rich diff interface (default)
+- **Built-in Fallback UI**: Sidebar interface with inline diff visualization when diffview is unavailable
+- **Real-time File Watching**: Automatic change detection with configurable debouncing
+- **Hot Reload**: Automatically reloads buffers when files change on disk
+- **Git Integration**: Stage files on accept, revert to HEAD on decline
+- **Batch Operations**: Accept or decline all pending changes at once
 
 ## Configuration
 
@@ -51,6 +55,9 @@ Default configuration:
 
 ```lua
 require("resu").setup({
+  use_diffview = true,
+  hot_reload = true,
+  debounce_ms = 100,
   watch_dir = nil,
   ignored_files = {
     "%.git/",
@@ -60,18 +67,13 @@ require("resu").setup({
     "%.DS_Store",
     "%.swp",
   },
-  auto_stage = false,
-  view_mode = "split",
-  window = {
-    position = "left",
-    width = 25,
-    border = "rounded",
-  },
   keymaps = {
+    toggle = "<leader>rt",
     accept = "<leader>ra",
     decline = "<leader>rd",
-    next = "<C-j>",
-    prev = "<C-k>",
+    accept_all = "<leader>rA",
+    decline_all = "<leader>rD",
+    refresh = "<leader>rr",
     quit = "q",
   },
 })
@@ -79,72 +81,90 @@ require("resu").setup({
 
 ### Configuration Options
 
-- `watch_dir`: Directory to watch for changes. Defaults to current working directory.
-- `ignored_files`: Patterns of files to ignore. Uses Lua pattern matching.
-- `auto_stage`: Automatically stage accepted files with `git add`.
-- `window.position`: Position of the review sidebar.
-- `window.width`: Width of the review sidebar in columns.
-- `window.border`: Border style for the window.
-- `keymaps`: Key mappings for review actions (active when review panel is open).
+| Option          | Type    | Default   | Description                                   |
+| --------------- | ------- | --------- | --------------------------------------------- |
+| `use_diffview`  | boolean | `true`    | Use diffview.nvim when available              |
+| `hot_reload`    | boolean | `true`    | Auto-reload buffers when files change on disk |
+| `debounce_ms`   | number  | `100`     | Debounce delay (ms) for file watcher          |
+| `watch_dir`     | string  | `nil`     | Directory to watch (defaults to cwd)          |
+| `ignored_files` | table   | see above | Lua patterns for files to ignore              |
+| `keymaps`       | table   | see above | Key mappings for actions                      |
 
 ## Usage
 
 ### Basic Workflow
 
-1. Open the review panel:
-   
+1. Start working with your AI coding tool (Claude Code, Cursor, etc.)
+
+2. Toggle the review panel:
 ```vim
 :ResuToggle
 ```
 
-2. Navigate through changed files using `<C-j>` and `<C-k>` or `j` and `k`.
+3. Review changes in the diff view
 
-3. Review the inline diff for each file.
+4. Accept changes with `<leader>ra` (stages the file) or decline with `<leader>rd` (reverts to HEAD)
 
-4. Accept changes with `<leader>ra` or decline with `<leader>rd`.
-
-5. Close the panel with `q` or `:ResuToggle`.
+5. Use `<leader>rA` to accept all or `<leader>rD` to decline all pending changes
 
 ### Commands
 
-- `:ResuOpen` - Open the review panel
-- `:ResuClose` - Close the review panel
-- `:ResuToggle` - Toggle the review panel
-- `:ResuNext` - Jump to next changed file
-- `:ResuPrev` - Jump to previous changed file
-- `:ResuAccept` - Accept changes in current file
-- `:ResuDecline` - Decline changes in current file
-- `:ResuAcceptAll` - Accept all pending changes
-- `:ResuDeclineAll` - Decline all pending changes
-- `:ResuReset` - Reset all file states
+| Command           | Description                         |
+| ----------------- | ----------------------------------- |
+| `:ResuOpen`       | Open the diff view                  |
+| `:ResuClose`      | Close the diff view                 |
+| `:ResuToggle`     | Toggle the diff view                |
+| `:ResuRefresh`    | Refresh the view and reload buffers |
+| `:ResuAccept`     | Accept/stage current file           |
+| `:ResuDecline`    | Decline/revert current file to HEAD |
+| `:ResuAcceptAll`  | Accept/stage all changes            |
+| `:ResuDeclineAll` | Decline/revert all changes          |
+| `:ResuReset`      | Reset plugin state                  |
 
 ### Default Keymaps
 
-When the review panel is open:
+| Key          | Action                     |
+| ------------ | -------------------------- |
+| `<leader>rt` | Toggle diff view           |
+| `<leader>ra` | Accept current file        |
+| `<leader>rd` | Decline current file       |
+| `<leader>rA` | Accept all changes         |
+| `<leader>rD` | Decline all changes        |
+| `<leader>rr` | Refresh view               |
+| `q`          | Close panel (in legacy UI) |
 
-- `<leader>ra` - Accept current file changes
-- `<leader>rd` - Decline current file changes
-- `<C-j>` or `j` - Next file
-- `<C-k>` or `k` - Previous file
-- `<CR>` - Open current file in editor
-- `q` - Close review panel
-- `<leader>rt` - Toggle review panel (global)
+### Legacy UI Keymaps (when diffview is unavailable)
+
+| Key    | Action              |
+| ------ | ------------------- |
+| `j`    | Next file           |
+| `k`    | Previous file       |
+| `<CR>` | Open file in editor |
+| `q`    | Close panel         |
 
 ## How It Works
 
-1. resu.nvim monitors your project directory for file changes using filesystem events.
-2. When a change is detected, it captures a baseline snapshot of the file.
-3. Changes are displayed in a sidebar with inline diffs showing additions and deletions.
-4. Accepting a change keeps the modifications and removes tracking.
-5. Declining a change reverts the file to its baseline state.
-6. State persists across Neovim sessions until explicitly cleared.
+### With Diffview (Default)
+
+1. resu.nvim monitors your project directory for file changes using libuv filesystem events
+2. Changes are displayed using diffview.nvim's powerful diff interface
+3. **Accept** stages the file with `git add`
+4. **Decline** reverts the file to HEAD using `git checkout` (or removes untracked files)
+5. Hot reload keeps your buffers in sync with disk changes
+
+### Without Diffview (Fallback)
+
+1. A sidebar shows all modified and untracked files
+2. Inline diffs are rendered using virtual text (additions in green, deletions in red)
+3. Navigate files with `j`/`k` and press `<CR>` to view
+4. Accept saves the current buffer state, decline reverts to the git baseline
 
 ## Use Cases
 
 - Reviewing AI-generated code changes before committing
 - Managing incremental modifications from AI coding assistants
-- Keeping control over file-level changes in collaborative AI workflows
 - Quick approval or rejection of automated refactoring
+- Keeping control over file-level changes in collaborative AI workflows
 
 ## License
 

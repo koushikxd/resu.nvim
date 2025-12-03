@@ -1,3 +1,6 @@
+-- Diffview.nvim integration (default UI mode)
+-- Wraps diffview commands and provides stage/revert operations
+
 local M = {}
 
 local is_open = false
