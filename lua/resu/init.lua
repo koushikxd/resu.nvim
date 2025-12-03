@@ -195,25 +195,37 @@ function M.accept_all()
     local state = require("resu.state")
     local files = state.get_files()
     local count = 0
+    local skipped = 0
     for _, file in ipairs(files) do
       if file.status == state.Status.PENDING then
         local buf = vim.fn.bufnr(file.path)
         if buf ~= -1 and vim.api.nvim_buf_is_valid(buf) then
-          get_legacy_diff().clear(buf)
           local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
           local f = io.open(file.path, "w")
           if f then
             f:write(table.concat(lines, "\n") .. "\n")
             f:close()
             vim.api.nvim_buf_set_option(buf, "modified", false)
+            get_legacy_diff().clear(buf)
+            state.update_status(file.path, state.Status.ACCEPTED)
+            count = count + 1
+          else
+            skipped = skipped + 1
           end
+        else
+          skipped = skipped + 1
         end
-        state.update_status(file.path, state.Status.ACCEPTED)
-        count = count + 1
       end
     end
     get_legacy_ui().update_selection()
-    vim.notify("Resu: Accepted all changes (" .. count .. " files)", vim.log.levels.INFO)
+    if skipped > 0 then
+      vim.notify(
+        "Resu: Accepted " .. count .. " files, skipped " .. skipped .. " (no buffer or write failed)",
+        vim.log.levels.WARN
+      )
+    else
+      vim.notify("Resu: Accepted all changes (" .. count .. " files)", vim.log.levels.INFO)
+    end
   end
 end
 
@@ -228,6 +240,7 @@ function M.decline_all()
     local state = require("resu.state")
     local files = state.get_files()
     local count = 0
+    local skipped = 0
     for _, file in ipairs(files) do
       if file.status == state.Status.PENDING then
         local cmd = "git show HEAD:" .. vim.fn.shellescape(file.path)
@@ -243,14 +256,25 @@ function M.decline_all()
               vim.api.nvim_buf_set_option(buf, "modified", false)
               get_legacy_diff().clear(buf)
             end
+            state.update_status(file.path, state.Status.DECLINED)
+            count = count + 1
+          else
+            skipped = skipped + 1
           end
+        else
+          skipped = skipped + 1
         end
-        state.update_status(file.path, state.Status.DECLINED)
-        count = count + 1
       end
     end
     get_legacy_ui().update_selection()
-    vim.notify("Resu: Declined all changes (" .. count .. " files)", vim.log.levels.INFO)
+    if skipped > 0 then
+      vim.notify(
+        "Resu: Declined " .. count .. " files, skipped " .. skipped .. " (not in HEAD or write failed)",
+        vim.log.levels.WARN
+      )
+    else
+      vim.notify("Resu: Declined all changes (" .. count .. " files)", vim.log.levels.INFO)
+    end
   end
 end
 

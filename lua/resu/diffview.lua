@@ -100,6 +100,14 @@ function M.setup()
     end,
   })
 
+  vim.api.nvim_create_autocmd("User", {
+    pattern = "DiffviewDiffBufRead",
+    callback = function()
+      vim.opt_local.foldenable = false
+      vim.opt_local.foldlevel = 99
+    end,
+  })
+
   vim.api.nvim_create_autocmd("FocusGained", {
     callback = function()
       if is_open then
