@@ -76,7 +76,7 @@ function M.on_file_change(filepath, _)
   end
 
   local is_in_dot_git_dir = filepath:match("/%.git/") or filepath:match("^%.git/")
-  if is_in_dot_git_dir or not is_git_ignored(filepath) then
+  if not is_in_dot_git_dir and not is_git_ignored(filepath) then
     M.update_files()
   end
 end
